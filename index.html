@@ -291,11 +291,27 @@
     font-family: inherit;
     font-size: 0.9rem;
   }
+  .sync-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  #syncTextarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.6rem;
+    border: 1px solid #8888;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    font-family: monospace;
+    font-size: 0.8rem;
+  }
   .print-only {
     display: none;
   }
   @media print {
-    .add-store, #storeTabs, .add-item, .remove-btn, .list-actions, h1, #noStoreMsg, #receiptReview, #importView, #searchInput {
+    .add-store, #storeTabs, .add-item, .remove-btn, .list-actions, h1, #noStoreMsg, #receiptReview, #importView, #searchInput, .sync-row, #syncView {
       display: none !important;
     }
     .print-only {
@@ -317,6 +333,19 @@
 </div>
 
 <div class="stores" id="storeTabs"></div>
+
+<div class="sync-row">
+  <button id="exportDataBtn" class="secondary">📤 Export all data</button>
+  <button id="importDataBtn" class="secondary">📥 Import all data</button>
+</div>
+<div id="syncView" style="display:none;">
+  <p id="syncInstructions" class="empty"></p>
+  <textarea id="syncTextarea" rows="10"></textarea>
+  <div class="receipt-actions">
+    <button id="syncPrimaryBtn"></button>
+    <button id="syncCancelBtn" class="secondary">Close</button>
+  </div>
+</div>
 
 <div id="listSection" style="display:none;">
   <div class="add-item">
@@ -439,13 +468,9 @@ function archiveItemToHistory(store, item) {
   bucket.items.push(item);
 }
 
-function loadData() {
-  let d;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    d = raw ? JSON.parse(raw) : defaultData();
-  } catch (e) {
-    d = defaultData();
+function normalizeData(d) {
+  if (!d || typeof d !== "object" || !d.stores || typeof d.stores !== "object") {
+    throw new Error("That doesn't look like valid shopping list data.");
   }
   if (!d.sortMode) d.sortMode = {};
   if (!d.historyView) d.historyView = {};
@@ -463,7 +488,22 @@ function loadData() {
       if (!item.category) item.category = "Other";
     });
   });
+  if (!d.activeStore || !d.stores[d.activeStore]) {
+    const names = Object.keys(d.stores);
+    d.activeStore = names.length ? names[0] : null;
+  }
   return d;
+}
+
+function loadData() {
+  let d;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    d = raw ? JSON.parse(raw) : defaultData();
+  } catch (e) {
+    d = defaultData();
+  }
+  return normalizeData(d);
 }
 
 function saveData() {
@@ -1118,6 +1158,82 @@ document.getElementById("importCancelBtn").addEventListener("click", () => {
 document.getElementById("searchInput").addEventListener("input", (e) => {
   searchQuery = e.target.value;
   render();
+});
+
+let syncMode = null;
+
+function showSyncView(mode) {
+  syncMode = mode;
+  const view = document.getElementById("syncView");
+  const instructions = document.getElementById("syncInstructions");
+  const textarea = document.getElementById("syncTextarea");
+  const primaryBtn = document.getElementById("syncPrimaryBtn");
+
+  view.style.display = "block";
+
+  if (mode === "export") {
+    instructions.textContent =
+      "Copy this text, then paste it into \"Import all data\" on your other device.";
+    textarea.value = JSON.stringify(data);
+    textarea.readOnly = true;
+    primaryBtn.textContent = "Copy to clipboard";
+  } else {
+    instructions.textContent =
+      "Paste data exported from another device here, then load it. This replaces everything currently in this browser.";
+    textarea.value = "";
+    textarea.readOnly = false;
+    primaryBtn.textContent = "Load this data";
+  }
+}
+
+function hideSyncView() {
+  syncMode = null;
+  document.getElementById("syncView").style.display = "none";
+}
+
+document.getElementById("exportDataBtn").addEventListener("click", () => {
+  showSyncView("export");
+});
+
+document.getElementById("importDataBtn").addEventListener("click", () => {
+  showSyncView("import");
+});
+
+document.getElementById("syncCancelBtn").addEventListener("click", () => {
+  hideSyncView();
+});
+
+document.getElementById("syncPrimaryBtn").addEventListener("click", async () => {
+  const textarea = document.getElementById("syncTextarea");
+  const primaryBtn = document.getElementById("syncPrimaryBtn");
+
+  if (syncMode === "export") {
+    try {
+      await navigator.clipboard.writeText(textarea.value);
+      const original = primaryBtn.textContent;
+      primaryBtn.textContent = "Copied!";
+      setTimeout(() => { primaryBtn.textContent = original; }, 1500);
+    } catch (err) {
+      alert("Couldn't copy automatically — select the text and copy it manually.");
+    }
+    return;
+  }
+
+  if (!confirm("Replace all shopping list data in this browser with what you pasted? This can't be undone.")) return;
+  try {
+    const parsed = normalizeData(JSON.parse(textarea.value));
+    data = parsed;
+    editingIdx = null;
+    receiptReviewActive = false;
+    importActive = false;
+    searchQuery = "";
+    document.getElementById("searchInput").value = "";
+    saveData();
+    hideSyncView();
+    render();
+  } catch (err) {
+    alert("Couldn't load that data: " + err.message);
+  }
 });
 
 render();
