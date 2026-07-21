@@ -88,6 +88,16 @@
     background: transparent;
     color: inherit;
   }
+  #searchInput {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.5rem;
+    margin-bottom: 0.75rem;
+    border: 1px solid #8888;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+  }
   .add-item input[type="number"] {
     flex: 1;
     width: 4rem;
@@ -285,7 +295,7 @@
     display: none;
   }
   @media print {
-    .add-store, #storeTabs, .add-item, .remove-btn, .list-actions, h1, #noStoreMsg, #receiptReview, #importView {
+    .add-store, #storeTabs, .add-item, .remove-btn, .list-actions, h1, #noStoreMsg, #receiptReview, #importView, #searchInput {
       display: none !important;
     }
     .print-only {
@@ -315,6 +325,7 @@
     <select id="itemCategory"></select>
     <button id="addItemBtn">Add</button>
   </div>
+  <input type="text" id="searchInput" placeholder="🔍 Search this list...">
   <div class="list-actions">
     <div>
       <button id="sortToggleBtn" class="secondary">Sort: Added order</button>
@@ -466,6 +477,7 @@ let receiptLoading = false;
 let receiptCandidates = null;
 let receiptError = null;
 let importActive = false;
+let searchQuery = "";
 
 function parsePastedList(text) {
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
@@ -638,6 +650,8 @@ function render() {
       editingIdx = null;
       receiptReviewActive = false;
       importActive = false;
+      searchQuery = "";
+      document.getElementById("searchInput").value = "";
       saveData();
       render();
     });
@@ -692,11 +706,14 @@ function render() {
   const receiptReviewEl = document.getElementById("receiptReview");
   const importViewEl = document.getElementById("importView");
 
+  const searchInputEl = document.getElementById("searchInput");
+
   if (receiptReviewActive) {
     addItemRow.style.display = "none";
     listActionsEl.style.display = "none";
     itemsEl.style.display = "none";
     importViewEl.style.display = "none";
+    searchInputEl.style.display = "none";
     receiptReviewEl.style.display = "block";
     renderReceiptReview(store, receiptReviewEl);
     return;
@@ -707,6 +724,7 @@ function render() {
     addItemRow.style.display = "none";
     listActionsEl.style.display = "none";
     itemsEl.style.display = "none";
+    searchInputEl.style.display = "none";
     importViewEl.style.display = "block";
     return;
   }
@@ -720,6 +738,7 @@ function render() {
   addItemRow.style.display = inHistoryView ? "none" : "flex";
   sortBtn.style.display = inHistoryView ? "none" : "inline-block";
   newWeekBtn.style.display = inHistoryView ? "none" : "inline-block";
+  searchInputEl.style.display = inHistoryView ? "none" : "block";
   itemsEl.style.display = "block";
 
   if (inHistoryView) {
@@ -775,6 +794,22 @@ function render() {
     const li = document.createElement("li");
     li.className = "empty";
     li.textContent = "No items yet for " + data.activeStore + ".";
+    itemsEl.appendChild(li);
+    return;
+  }
+
+  const query = searchQuery.trim().toLowerCase();
+  const visibleIdx = new Set(
+    items
+      .map((item, idx) => ({ item, idx }))
+      .filter(e => !query || e.item.name.toLowerCase().includes(query))
+      .map(e => e.idx)
+  );
+
+  if (query && visibleIdx.size === 0) {
+    const li = document.createElement("li");
+    li.className = "empty";
+    li.textContent = "No items match \"" + searchQuery.trim() + "\".";
     itemsEl.appendChild(li);
     return;
   }
@@ -886,6 +921,7 @@ function render() {
 
   if (!byCategory) {
     items.forEach((item, idx) => {
+      if (!visibleIdx.has(idx)) return;
       itemsEl.appendChild(makeItemRow(item, idx));
     });
     return;
@@ -894,7 +930,7 @@ function render() {
   CATEGORIES.forEach(category => {
     const entries = items
       .map((item, idx) => ({ item, idx }))
-      .filter(e => (e.item.category || "Other") === category);
+      .filter(e => (e.item.category || "Other") === category && visibleIdx.has(e.idx));
     if (entries.length === 0) return;
 
     const header = document.createElement("li");
@@ -919,6 +955,8 @@ document.getElementById("addStoreBtn").addEventListener("click", () => {
   editingIdx = null;
   receiptReviewActive = false;
   importActive = false;
+  searchQuery = "";
+  document.getElementById("searchInput").value = "";
   input.value = "";
   saveData();
   render();
@@ -1074,6 +1112,11 @@ document.getElementById("importAddBtn").addEventListener("click", () => {
 
 document.getElementById("importCancelBtn").addEventListener("click", () => {
   importActive = false;
+  render();
+});
+
+document.getElementById("searchInput").addEventListener("input", (e) => {
+  searchQuery = e.target.value;
   render();
 });
 
