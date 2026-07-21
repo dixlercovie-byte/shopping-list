@@ -171,6 +171,24 @@
   li.category-header:first-child {
     padding-top: 0.3rem !important;
   }
+  li.week-header {
+    font-weight: bold;
+    opacity: 0.8;
+    font-size: 0.9rem;
+    border-bottom: none !important;
+    padding-top: 1.2rem !important;
+  }
+  li.week-header:first-child {
+    padding-top: 0.3rem !important;
+  }
+  .add-back-btn {
+    background: transparent;
+    border: none;
+    color: #2f9e44;
+    cursor: pointer;
+    font-size: 1.2rem;
+    padding: 0 0.3rem;
+  }
   .edit-btn {
     background: transparent;
     border: none;
@@ -289,6 +307,7 @@
   <div class="list-actions">
     <div>
       <button id="sortToggleBtn" class="secondary">Sort: Added order</button>
+      <button id="historyToggleBtn" class="secondary">🕘 Past lists</button>
       <button id="newWeekBtn" class="secondary">🗓️ Start new week</button>
       <button id="scanReceiptBtn" class="secondary">📷 Scan receipt</button>
       <input type="file" id="receiptInput" accept="image/*" capture="environment" style="display:none;">
@@ -358,11 +377,36 @@ function defaultData() {
         item("100 calorie yogurts (blueberry/strawberry only)", 4, "Dairy & Eggs"),
         item("Cottage cheese", 2, "Dairy & Eggs"),
         item("Lime yogurt", 1, "Dairy & Eggs"),
-      ] },
+      ], history: [] },
     },
     activeStore: "Aldi",
     sortMode: {},
+    historyView: {},
   };
+}
+
+function getWeekInfo(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const sunday = new Date(d);
+  sunday.setDate(d.getDate() - day);
+  sunday.setHours(0, 0, 0, 0);
+  const saturday = new Date(sunday);
+  saturday.setDate(sunday.getDate() + 6);
+  const key = sunday.toISOString().slice(0, 10);
+  const fmt = (dt) => dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const label = "Week of " + fmt(sunday) + " – " + fmt(saturday);
+  return { key, label };
+}
+
+function archiveItemToHistory(store, item) {
+  const { key, label } = getWeekInfo(new Date());
+  let bucket = store.history.find(h => h.week === key);
+  if (!bucket) {
+    bucket = { week: key, label, items: [] };
+    store.history.unshift(bucket);
+  }
+  bucket.items.push(item);
 }
 
 function loadData() {
@@ -374,12 +418,14 @@ function loadData() {
     d = defaultData();
   }
   if (!d.sortMode) d.sortMode = {};
+  if (!d.historyView) d.historyView = {};
   Object.keys(d.stores).forEach(name => {
     const store = d.stores[name];
     if (Array.isArray(store)) {
-      d.stores[name] = { items: store };
-    } else if (!d.stores[name].items) {
-      d.stores[name].items = [];
+      d.stores[name] = { items: store, history: [] };
+    } else {
+      if (!d.stores[name].items) d.stores[name].items = [];
+      if (!d.stores[name].history) d.stores[name].history = [];
     }
   });
   Object.values(d.stores).forEach(store => {
@@ -604,6 +650,7 @@ function render() {
 
   const addItemRow = document.querySelector(".add-item");
   const sortBtn = document.getElementById("sortToggleBtn");
+  const newWeekBtn = document.getElementById("newWeekBtn");
   const listActionsEl = document.querySelector(".list-actions");
   const receiptReviewEl = document.getElementById("receiptReview");
 
@@ -617,8 +664,61 @@ function render() {
   }
   receiptReviewEl.style.display = "none";
   listActionsEl.style.display = "flex";
-  addItemRow.style.display = "flex";
+
+  const inHistoryView = !!data.historyView[data.activeStore];
+  const historyBtn = document.getElementById("historyToggleBtn");
+  historyBtn.textContent = inHistoryView ? "← Back to list" : "🕘 Past lists";
+
+  addItemRow.style.display = inHistoryView ? "none" : "flex";
+  sortBtn.style.display = inHistoryView ? "none" : "inline-block";
+  newWeekBtn.style.display = inHistoryView ? "none" : "inline-block";
   itemsEl.style.display = "block";
+
+  if (inHistoryView) {
+    if (!store.history || store.history.length === 0) {
+      const li = document.createElement("li");
+      li.className = "empty";
+      li.textContent = "No past items yet for " + data.activeStore + ".";
+      itemsEl.appendChild(li);
+      return;
+    }
+
+    store.history.forEach(bucket => {
+      const header = document.createElement("li");
+      header.className = "week-header";
+      header.textContent = bucket.label;
+      itemsEl.appendChild(header);
+
+      bucket.items.forEach(item => {
+        const li = document.createElement("li");
+
+        const nameSpan = document.createElement("span");
+        nameSpan.className = "name";
+        nameSpan.textContent = item.name;
+
+        const qtySpan = document.createElement("span");
+        qtySpan.className = "qty";
+        qtySpan.textContent = "x" + item.qty;
+
+        const addBackBtn = document.createElement("button");
+        addBackBtn.className = "add-back-btn";
+        addBackBtn.textContent = "+";
+        addBackBtn.title = "Add back to current list";
+        addBackBtn.addEventListener("click", () => {
+          store.items.push({ name: item.name, qty: item.qty, category: item.category, checked: false });
+          data.historyView[data.activeStore] = false;
+          saveData();
+          render();
+        });
+
+        li.appendChild(nameSpan);
+        li.appendChild(qtySpan);
+        li.appendChild(addBackBtn);
+        itemsEl.appendChild(li);
+      });
+    });
+    return;
+  }
 
   const byCategory = data.sortMode[data.activeStore] === "category";
   sortBtn.textContent = byCategory ? "Sort: By aisle/category" : "Sort: Added order";
@@ -722,7 +822,8 @@ function render() {
     removeBtn.textContent = "✕";
     removeBtn.title = "Remove";
     removeBtn.addEventListener("click", () => {
-      items.splice(idx, 1);
+      const [removed] = items.splice(idx, 1);
+      archiveItemToHistory(store, removed);
       saveData();
       render();
     });
@@ -764,7 +865,7 @@ document.getElementById("addStoreBtn").addEventListener("click", () => {
   const name = input.value.trim();
   if (!name) return;
   if (!data.stores[name]) {
-    data.stores[name] = { items: [] };
+    data.stores[name] = { items: [], history: [] };
   }
   data.activeStore = name;
   editingIdx = null;
@@ -857,6 +958,14 @@ document.getElementById("newWeekBtn").addEventListener("click", () => {
   )) return;
 
   store.items.forEach(item => { item.checked = false; });
+  editingIdx = null;
+  saveData();
+  render();
+});
+
+document.getElementById("historyToggleBtn").addEventListener("click", () => {
+  if (!data.activeStore) return;
+  data.historyView[data.activeStore] = !data.historyView[data.activeStore];
   editingIdx = null;
   saveData();
   render();
