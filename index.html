@@ -171,16 +171,6 @@
   li.category-header:first-child {
     padding-top: 0.3rem !important;
   }
-  li.week-header {
-    font-weight: bold;
-    opacity: 0.8;
-    font-size: 0.9rem;
-    border-bottom: none !important;
-    padding-top: 1.2rem !important;
-  }
-  li.week-header:first-child {
-    padding-top: 0.3rem !important;
-  }
   .add-back-btn {
     background: transparent;
     border: none;
@@ -232,11 +222,67 @@
     padding: 0.4rem 0.7rem;
     font-size: 0.85rem;
   }
+  .calendar-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+  }
+  .calendar-nav button {
+    padding: 0.35rem 0.7rem;
+  }
+  .calendar-nav .month-label {
+    font-weight: bold;
+  }
+  .calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+  }
+  .calendar-daylabel {
+    text-align: center;
+    font-size: 0.75rem;
+    opacity: 0.6;
+    padding-bottom: 0.25rem;
+  }
+  .calendar-day {
+    position: relative;
+    aspect-ratio: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    border: 1px solid transparent;
+  }
+  .calendar-day.other-month {
+    opacity: 0.3;
+  }
+  .calendar-day.has-history {
+    background: #4a7dfc22;
+    border-color: #4a7dfc;
+    cursor: pointer;
+    font-weight: bold;
+  }
+  .calendar-day.has-history:hover {
+    background: #4a7dfc44;
+  }
+  .calendar-day .item-badge {
+    font-size: 0.65rem;
+    opacity: 0.8;
+  }
+  .calendar-back {
+    background: transparent;
+    border: 1px solid #8888;
+    color: inherit;
+    margin-bottom: 0.75rem;
+  }
   .print-only {
     display: none;
   }
   @media print {
-    .add-store, #storeTabs, .add-item, .remove-btn, .list-actions, h1, #noStoreMsg {
+    .add-store, #storeTabs, .add-item, .remove-btn, .list-actions, h1, #noStoreMsg, #calendarView {
       display: none !important;
     }
     .print-only {
@@ -269,7 +315,7 @@
   <div class="list-actions">
     <div>
       <button id="sortToggleBtn" class="secondary">Sort: Added order</button>
-      <button id="historyToggleBtn" class="secondary">🕘 Past lists</button>
+      <button id="historyToggleBtn" class="secondary">📅 Calendar</button>
       <button id="newWeekBtn" class="secondary">🗓️ Start new week</button>
     </div>
     <div>
@@ -279,6 +325,7 @@
   </div>
   <h2 id="printStoreName" class="print-only"></h2>
   <ul id="items"></ul>
+  <div id="calendarView" style="display:none;"></div>
 </div>
 <div id="noStoreMsg" class="empty">Add a store above to start a shopping list.</div>
 
@@ -401,6 +448,170 @@ function saveData() {
 
 let data = loadData();
 let editingIdx = null;
+let calendarMonthOffset = 0;
+let selectedWeekKey = null;
+
+function getMonthGrid(year, month) {
+  const firstOfMonth = new Date(year, month, 1);
+  const startDay = firstOfMonth.getDay();
+  const gridStart = new Date(year, month, 1 - startDay);
+  const weeks = [];
+  let cursor = new Date(gridStart);
+  for (let w = 0; w < 6; w++) {
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      days.push(new Date(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    weeks.push(days);
+  }
+  return weeks;
+}
+
+function renderCalendarView(store, container) {
+  container.innerHTML = "";
+
+  if (selectedWeekKey) {
+    const bucket = store.history.find(h => h.week === selectedWeekKey);
+    if (!bucket) {
+      selectedWeekKey = null;
+      renderCalendarView(store, container);
+      return;
+    }
+
+    const backBtn = document.createElement("button");
+    backBtn.className = "calendar-back";
+    backBtn.textContent = "← Back to calendar";
+    backBtn.addEventListener("click", () => {
+      selectedWeekKey = null;
+      render();
+    });
+    container.appendChild(backBtn);
+
+    const heading = document.createElement("h2");
+    heading.textContent = bucket.label;
+    container.appendChild(heading);
+
+    const ul = document.createElement("ul");
+    if (bucket.items.length === 0) {
+      const li = document.createElement("li");
+      li.className = "empty";
+      li.textContent = "No items in this week.";
+      ul.appendChild(li);
+    }
+    bucket.items.forEach(item => {
+      const li = document.createElement("li");
+
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "name";
+      nameSpan.textContent = item.name;
+
+      const qtySpan = document.createElement("span");
+      qtySpan.className = "qty";
+      qtySpan.textContent = "x" + item.qty;
+
+      const addBackBtn = document.createElement("button");
+      addBackBtn.className = "add-back-btn";
+      addBackBtn.textContent = "+";
+      addBackBtn.title = "Add back to current list";
+      addBackBtn.addEventListener("click", () => {
+        store.items.push({ name: item.name, qty: item.qty, category: item.category, checked: false });
+        saveData();
+        render();
+      });
+
+      li.appendChild(nameSpan);
+      li.appendChild(qtySpan);
+      li.appendChild(addBackBtn);
+      ul.appendChild(li);
+    });
+    container.appendChild(ul);
+    return;
+  }
+
+  const today = new Date();
+  const base = new Date(today.getFullYear(), today.getMonth() + calendarMonthOffset, 1);
+  const year = base.getFullYear();
+  const month = base.getMonth();
+
+  const nav = document.createElement("div");
+  nav.className = "calendar-nav";
+
+  const prevBtn = document.createElement("button");
+  prevBtn.className = "secondary";
+  prevBtn.textContent = "←";
+  prevBtn.addEventListener("click", () => {
+    calendarMonthOffset -= 1;
+    render();
+  });
+
+  const label = document.createElement("span");
+  label.className = "month-label";
+  label.textContent = base.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+
+  const nextBtn = document.createElement("button");
+  nextBtn.className = "secondary";
+  nextBtn.textContent = "→";
+  nextBtn.addEventListener("click", () => {
+    calendarMonthOffset += 1;
+    render();
+  });
+
+  nav.appendChild(prevBtn);
+  nav.appendChild(label);
+  nav.appendChild(nextBtn);
+  container.appendChild(nav);
+
+  const grid = document.createElement("div");
+  grid.className = "calendar-grid";
+
+  ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].forEach(d => {
+    const el = document.createElement("div");
+    el.className = "calendar-daylabel";
+    el.textContent = d;
+    grid.appendChild(el);
+  });
+
+  const weeks = getMonthGrid(year, month);
+  weeks.forEach(days => {
+    const weekKey = getWeekInfo(days[0]).key;
+    const bucket = store.history.find(h => h.week === weekKey);
+
+    days.forEach(day => {
+      const cell = document.createElement("div");
+      cell.className = "calendar-day";
+      if (day.getMonth() !== month) cell.classList.add("other-month");
+
+      const dayNum = document.createElement("span");
+      dayNum.textContent = day.getDate();
+      cell.appendChild(dayNum);
+
+      if (bucket) {
+        cell.classList.add("has-history");
+        const badge = document.createElement("span");
+        badge.className = "item-badge";
+        badge.textContent = bucket.items.length + " item" + (bucket.items.length === 1 ? "" : "s");
+        cell.appendChild(badge);
+        cell.title = bucket.label;
+        cell.addEventListener("click", () => {
+          selectedWeekKey = weekKey;
+          render();
+        });
+      }
+
+      grid.appendChild(cell);
+    });
+  });
+
+  container.appendChild(grid);
+
+  if (!store.history || store.history.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "No past items yet for " + data.activeStore + ".";
+    container.appendChild(empty);
+  }
+}
 
 function render() {
   const tabsEl = document.getElementById("storeTabs");
@@ -417,6 +628,8 @@ function render() {
     btn.addEventListener("click", () => {
       data.activeStore = name;
       editingIdx = null;
+      calendarMonthOffset = 0;
+      selectedWeekKey = null;
       saveData();
       render();
     });
@@ -466,57 +679,20 @@ function render() {
 
   const inHistoryView = !!data.historyView[data.activeStore];
   const historyBtn = document.getElementById("historyToggleBtn");
-  historyBtn.textContent = inHistoryView ? "← Back to list" : "🕘 Past lists";
+  historyBtn.textContent = inHistoryView ? "← Back to list" : "📅 Calendar";
 
   const addItemRow = document.querySelector(".add-item");
   const sortBtn = document.getElementById("sortToggleBtn");
   const newWeekBtn = document.getElementById("newWeekBtn");
+  const calendarViewEl = document.getElementById("calendarView");
   addItemRow.style.display = inHistoryView ? "none" : "flex";
   sortBtn.style.display = inHistoryView ? "none" : "inline-block";
   newWeekBtn.style.display = inHistoryView ? "none" : "inline-block";
+  itemsEl.style.display = inHistoryView ? "none" : "block";
+  calendarViewEl.style.display = inHistoryView ? "block" : "none";
 
   if (inHistoryView) {
-    if (!store.history || store.history.length === 0) {
-      const li = document.createElement("li");
-      li.className = "empty";
-      li.textContent = "No past items yet for " + data.activeStore + ".";
-      itemsEl.appendChild(li);
-      return;
-    }
-
-    store.history.forEach(bucket => {
-      const header = document.createElement("li");
-      header.className = "week-header";
-      header.textContent = bucket.label;
-      itemsEl.appendChild(header);
-
-      bucket.items.forEach(item => {
-        const li = document.createElement("li");
-
-        const nameSpan = document.createElement("span");
-        nameSpan.className = "name";
-        nameSpan.textContent = item.name;
-
-        const qtySpan = document.createElement("span");
-        qtySpan.className = "qty";
-        qtySpan.textContent = "x" + item.qty;
-
-        const addBackBtn = document.createElement("button");
-        addBackBtn.className = "add-back-btn";
-        addBackBtn.textContent = "+";
-        addBackBtn.title = "Add back to current list";
-        addBackBtn.addEventListener("click", () => {
-          store.items.push({ name: item.name, qty: item.qty, category: item.category, checked: false });
-          saveData();
-          render();
-        });
-
-        li.appendChild(nameSpan);
-        li.appendChild(qtySpan);
-        li.appendChild(addBackBtn);
-        itemsEl.appendChild(li);
-      });
-    });
+    renderCalendarView(store, calendarViewEl);
     return;
   }
 
@@ -669,6 +845,8 @@ document.getElementById("addStoreBtn").addEventListener("click", () => {
   }
   data.activeStore = name;
   editingIdx = null;
+  calendarMonthOffset = 0;
+  selectedWeekKey = null;
   input.value = "";
   saveData();
   render();
@@ -748,6 +926,8 @@ document.getElementById("historyToggleBtn").addEventListener("click", () => {
   if (!data.activeStore) return;
   data.historyView[data.activeStore] = !data.historyView[data.activeStore];
   editingIdx = null;
+  calendarMonthOffset = 0;
+  selectedWeekKey = null;
   saveData();
   render();
 });
