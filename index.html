@@ -171,14 +171,6 @@
   li.category-header:first-child {
     padding-top: 0.3rem !important;
   }
-  .add-back-btn {
-    background: transparent;
-    border: none;
-    color: #2f9e44;
-    cursor: pointer;
-    font-size: 1.2rem;
-    padding: 0 0.3rem;
-  }
   .edit-btn {
     background: transparent;
     border: none;
@@ -222,62 +214,6 @@
     padding: 0.4rem 0.7rem;
     font-size: 0.85rem;
   }
-  .calendar-nav {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 0.75rem;
-  }
-  .calendar-nav button {
-    padding: 0.35rem 0.7rem;
-  }
-  .calendar-nav .month-label {
-    font-weight: bold;
-  }
-  .calendar-grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 4px;
-  }
-  .calendar-daylabel {
-    text-align: center;
-    font-size: 0.75rem;
-    opacity: 0.6;
-    padding-bottom: 0.25rem;
-  }
-  .calendar-day {
-    position: relative;
-    aspect-ratio: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    border-radius: 6px;
-    font-size: 0.85rem;
-    border: 1px solid transparent;
-  }
-  .calendar-day.other-month {
-    opacity: 0.3;
-  }
-  .calendar-day.has-history {
-    background: #4a7dfc22;
-    border-color: #4a7dfc;
-    cursor: pointer;
-    font-weight: bold;
-  }
-  .calendar-day.has-history:hover {
-    background: #4a7dfc44;
-  }
-  .calendar-day .item-badge {
-    font-size: 0.65rem;
-    opacity: 0.8;
-  }
-  .calendar-back {
-    background: transparent;
-    border: 1px solid #8888;
-    color: inherit;
-    margin-bottom: 0.75rem;
-  }
   .receipt-status {
     padding: 1.5rem 0;
     text-align: center;
@@ -320,7 +256,7 @@
     display: none;
   }
   @media print {
-    .add-store, #storeTabs, .add-item, .remove-btn, .list-actions, h1, #noStoreMsg, #calendarView, #receiptReview {
+    .add-store, #storeTabs, .add-item, .remove-btn, .list-actions, h1, #noStoreMsg, #receiptReview {
       display: none !important;
     }
     .print-only {
@@ -353,7 +289,6 @@
   <div class="list-actions">
     <div>
       <button id="sortToggleBtn" class="secondary">Sort: Added order</button>
-      <button id="historyToggleBtn" class="secondary">📅 Calendar</button>
       <button id="newWeekBtn" class="secondary">🗓️ Start new week</button>
       <button id="scanReceiptBtn" class="secondary">📷 Scan receipt</button>
       <input type="file" id="receiptInput" accept="image/*" capture="environment" style="display:none;">
@@ -365,7 +300,6 @@
   </div>
   <h2 id="printStoreName" class="print-only"></h2>
   <ul id="items"></ul>
-  <div id="calendarView" style="display:none;"></div>
   <div id="receiptReview" style="display:none;"></div>
 </div>
 <div id="noStoreMsg" class="empty">Add a store above to start a shopping list.</div>
@@ -424,36 +358,11 @@ function defaultData() {
         item("100 calorie yogurts (blueberry/strawberry only)", 4, "Dairy & Eggs"),
         item("Cottage cheese", 2, "Dairy & Eggs"),
         item("Lime yogurt", 1, "Dairy & Eggs"),
-      ], history: [] },
+      ] },
     },
     activeStore: "Aldi",
     sortMode: {},
-    historyView: {},
   };
-}
-
-function getWeekInfo(date) {
-  const d = new Date(date);
-  const day = d.getDay();
-  const sunday = new Date(d);
-  sunday.setDate(d.getDate() - day);
-  sunday.setHours(0, 0, 0, 0);
-  const saturday = new Date(sunday);
-  saturday.setDate(sunday.getDate() + 6);
-  const key = sunday.toISOString().slice(0, 10);
-  const fmt = (dt) => dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  const label = "Week of " + fmt(sunday) + " – " + fmt(saturday);
-  return { key, label };
-}
-
-function archiveItemToHistory(store, item) {
-  const { key, label } = getWeekInfo(new Date());
-  let bucket = store.history.find(h => h.week === key);
-  if (!bucket) {
-    bucket = { week: key, label, items: [] };
-    store.history.unshift(bucket);
-  }
-  bucket.items.push(item);
 }
 
 function loadData() {
@@ -465,14 +374,12 @@ function loadData() {
     d = defaultData();
   }
   if (!d.sortMode) d.sortMode = {};
-  if (!d.historyView) d.historyView = {};
   Object.keys(d.stores).forEach(name => {
     const store = d.stores[name];
     if (Array.isArray(store)) {
-      d.stores[name] = { items: store, history: [] };
-    } else {
-      if (!d.stores[name].items) d.stores[name].items = [];
-      if (!d.stores[name].history) d.stores[name].history = [];
+      d.stores[name] = { items: store };
+    } else if (!d.stores[name].items) {
+      d.stores[name].items = [];
     }
   });
   Object.values(d.stores).forEach(store => {
@@ -489,8 +396,6 @@ function saveData() {
 
 let data = loadData();
 let editingIdx = null;
-let calendarMonthOffset = 0;
-let selectedWeekKey = null;
 let receiptReviewActive = false;
 let receiptLoading = false;
 let receiptCandidates = null;
@@ -634,170 +539,6 @@ function renderReceiptReview(store, container) {
   container.appendChild(actions);
 }
 
-function getMonthGrid(year, month) {
-  const firstOfMonth = new Date(year, month, 1);
-  const startDay = firstOfMonth.getDay();
-  const gridStart = new Date(year, month, 1 - startDay);
-  const weeks = [];
-  let cursor = new Date(gridStart);
-  for (let w = 0; w < 6; w++) {
-    const days = [];
-    for (let i = 0; i < 7; i++) {
-      days.push(new Date(cursor));
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    weeks.push(days);
-  }
-  return weeks;
-}
-
-function renderCalendarView(store, container) {
-  container.innerHTML = "";
-
-  if (selectedWeekKey) {
-    const bucket = store.history.find(h => h.week === selectedWeekKey);
-    if (!bucket) {
-      selectedWeekKey = null;
-      renderCalendarView(store, container);
-      return;
-    }
-
-    const backBtn = document.createElement("button");
-    backBtn.className = "calendar-back";
-    backBtn.textContent = "← Back to calendar";
-    backBtn.addEventListener("click", () => {
-      selectedWeekKey = null;
-      render();
-    });
-    container.appendChild(backBtn);
-
-    const heading = document.createElement("h2");
-    heading.textContent = bucket.label;
-    container.appendChild(heading);
-
-    const ul = document.createElement("ul");
-    if (bucket.items.length === 0) {
-      const li = document.createElement("li");
-      li.className = "empty";
-      li.textContent = "No items in this week.";
-      ul.appendChild(li);
-    }
-    bucket.items.forEach(item => {
-      const li = document.createElement("li");
-
-      const nameSpan = document.createElement("span");
-      nameSpan.className = "name";
-      nameSpan.textContent = item.name;
-
-      const qtySpan = document.createElement("span");
-      qtySpan.className = "qty";
-      qtySpan.textContent = "x" + item.qty;
-
-      const addBackBtn = document.createElement("button");
-      addBackBtn.className = "add-back-btn";
-      addBackBtn.textContent = "+";
-      addBackBtn.title = "Add back to current list";
-      addBackBtn.addEventListener("click", () => {
-        store.items.push({ name: item.name, qty: item.qty, category: item.category, checked: false });
-        data.historyView[data.activeStore] = false;
-        selectedWeekKey = null;
-        saveData();
-        render();
-      });
-
-      li.appendChild(nameSpan);
-      li.appendChild(qtySpan);
-      li.appendChild(addBackBtn);
-      ul.appendChild(li);
-    });
-    container.appendChild(ul);
-    return;
-  }
-
-  const today = new Date();
-  const base = new Date(today.getFullYear(), today.getMonth() + calendarMonthOffset, 1);
-  const year = base.getFullYear();
-  const month = base.getMonth();
-
-  const nav = document.createElement("div");
-  nav.className = "calendar-nav";
-
-  const prevBtn = document.createElement("button");
-  prevBtn.className = "secondary";
-  prevBtn.textContent = "←";
-  prevBtn.addEventListener("click", () => {
-    calendarMonthOffset -= 1;
-    render();
-  });
-
-  const label = document.createElement("span");
-  label.className = "month-label";
-  label.textContent = base.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-
-  const nextBtn = document.createElement("button");
-  nextBtn.className = "secondary";
-  nextBtn.textContent = "→";
-  nextBtn.addEventListener("click", () => {
-    calendarMonthOffset += 1;
-    render();
-  });
-
-  nav.appendChild(prevBtn);
-  nav.appendChild(label);
-  nav.appendChild(nextBtn);
-  container.appendChild(nav);
-
-  const grid = document.createElement("div");
-  grid.className = "calendar-grid";
-
-  ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].forEach(d => {
-    const el = document.createElement("div");
-    el.className = "calendar-daylabel";
-    el.textContent = d;
-    grid.appendChild(el);
-  });
-
-  const weeks = getMonthGrid(year, month);
-  weeks.forEach(days => {
-    const weekKey = getWeekInfo(days[0]).key;
-    const bucket = store.history.find(h => h.week === weekKey);
-
-    days.forEach(day => {
-      const cell = document.createElement("div");
-      cell.className = "calendar-day";
-      if (day.getMonth() !== month) cell.classList.add("other-month");
-
-      const dayNum = document.createElement("span");
-      dayNum.textContent = day.getDate();
-      cell.appendChild(dayNum);
-
-      if (bucket) {
-        cell.classList.add("has-history");
-        const badge = document.createElement("span");
-        badge.className = "item-badge";
-        badge.textContent = bucket.items.length + " item" + (bucket.items.length === 1 ? "" : "s");
-        cell.appendChild(badge);
-        cell.title = bucket.label;
-        cell.addEventListener("click", () => {
-          selectedWeekKey = weekKey;
-          render();
-        });
-      }
-
-      grid.appendChild(cell);
-    });
-  });
-
-  container.appendChild(grid);
-
-  if (!store.history || store.history.length === 0) {
-    const empty = document.createElement("p");
-    empty.className = "empty";
-    empty.textContent = "No past items yet for " + data.activeStore + ".";
-    container.appendChild(empty);
-  }
-}
-
 function render() {
   const tabsEl = document.getElementById("storeTabs");
   const storeNames = Object.keys(data.stores);
@@ -813,8 +554,6 @@ function render() {
     btn.addEventListener("click", () => {
       data.activeStore = name;
       editingIdx = null;
-      calendarMonthOffset = 0;
-      selectedWeekKey = null;
       receiptReviewActive = false;
       saveData();
       render();
@@ -863,39 +602,23 @@ function render() {
   const itemsEl = document.getElementById("items");
   itemsEl.innerHTML = "";
 
-  const inHistoryView = !!data.historyView[data.activeStore];
-  const historyBtn = document.getElementById("historyToggleBtn");
-  historyBtn.textContent = inHistoryView ? "← Back to list" : "📅 Calendar";
-
   const addItemRow = document.querySelector(".add-item");
   const sortBtn = document.getElementById("sortToggleBtn");
-  const newWeekBtn = document.getElementById("newWeekBtn");
   const listActionsEl = document.querySelector(".list-actions");
-  const calendarViewEl = document.getElementById("calendarView");
   const receiptReviewEl = document.getElementById("receiptReview");
 
   if (receiptReviewActive) {
     addItemRow.style.display = "none";
     listActionsEl.style.display = "none";
     itemsEl.style.display = "none";
-    calendarViewEl.style.display = "none";
     receiptReviewEl.style.display = "block";
     renderReceiptReview(store, receiptReviewEl);
     return;
   }
   receiptReviewEl.style.display = "none";
   listActionsEl.style.display = "flex";
-
-  addItemRow.style.display = inHistoryView ? "none" : "flex";
-  sortBtn.style.display = inHistoryView ? "none" : "inline-block";
-  newWeekBtn.style.display = inHistoryView ? "none" : "inline-block";
-  itemsEl.style.display = inHistoryView ? "none" : "block";
-  calendarViewEl.style.display = inHistoryView ? "block" : "none";
-
-  if (inHistoryView) {
-    renderCalendarView(store, calendarViewEl);
-    return;
-  }
+  addItemRow.style.display = "flex";
+  itemsEl.style.display = "block";
 
   const byCategory = data.sortMode[data.activeStore] === "category";
   sortBtn.textContent = byCategory ? "Sort: By aisle/category" : "Sort: Added order";
@@ -999,8 +722,7 @@ function render() {
     removeBtn.textContent = "✕";
     removeBtn.title = "Remove";
     removeBtn.addEventListener("click", () => {
-      const [removed] = items.splice(idx, 1);
-      archiveItemToHistory(store, removed);
+      items.splice(idx, 1);
       saveData();
       render();
     });
@@ -1042,12 +764,10 @@ document.getElementById("addStoreBtn").addEventListener("click", () => {
   const name = input.value.trim();
   if (!name) return;
   if (!data.stores[name]) {
-    data.stores[name] = { items: [], history: [] };
+    data.stores[name] = { items: [] };
   }
   data.activeStore = name;
   editingIdx = null;
-  calendarMonthOffset = 0;
-  selectedWeekKey = null;
   receiptReviewActive = false;
   input.value = "";
   saveData();
@@ -1124,16 +844,6 @@ document.getElementById("sortToggleBtn").addEventListener("click", () => {
   render();
 });
 
-document.getElementById("historyToggleBtn").addEventListener("click", () => {
-  if (!data.activeStore) return;
-  data.historyView[data.activeStore] = !data.historyView[data.activeStore];
-  editingIdx = null;
-  calendarMonthOffset = 0;
-  selectedWeekKey = null;
-  saveData();
-  render();
-});
-
 document.getElementById("newWeekBtn").addEventListener("click", () => {
   if (!data.activeStore) return;
   const store = data.stores[data.activeStore];
@@ -1143,11 +853,10 @@ document.getElementById("newWeekBtn").addEventListener("click", () => {
   }
   if (!confirm(
     "Start a new week for " + data.activeStore + "? " +
-    "This moves all " + store.items.length + " items into this week's history and clears the active list."
+    "This keeps the same list and unchecks everything so you can shop it again."
   )) return;
 
-  store.items.forEach(item => archiveItemToHistory(store, item));
-  store.items = [];
+  store.items.forEach(item => { item.checked = false; });
   editingIdx = null;
   saveData();
   render();
