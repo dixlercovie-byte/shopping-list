@@ -270,11 +270,22 @@
     gap: 0.5rem;
     margin-top: 1rem;
   }
+  #importTextarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.6rem;
+    border: 1px solid #8888;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    font-size: 0.9rem;
+  }
   .print-only {
     display: none;
   }
   @media print {
-    .add-store, #storeTabs, .add-item, .remove-btn, .list-actions, h1, #noStoreMsg, #receiptReview {
+    .add-store, #storeTabs, .add-item, .remove-btn, .list-actions, h1, #noStoreMsg, #receiptReview, #importView {
       display: none !important;
     }
     .print-only {
@@ -311,6 +322,7 @@
       <button id="newWeekBtn" class="secondary">🗓️ Start new week</button>
       <button id="scanReceiptBtn" class="secondary">📷 Scan receipt</button>
       <input type="file" id="receiptInput" accept="image/*" capture="environment" style="display:none;">
+      <button id="importListBtn" class="secondary">📥 Paste list</button>
     </div>
     <div>
       <button id="copyBtn" class="secondary">📋 Copy list</button>
@@ -320,6 +332,13 @@
   <h2 id="printStoreName" class="print-only"></h2>
   <ul id="items"></ul>
   <div id="receiptReview" style="display:none;"></div>
+  <div id="importView" style="display:none;">
+    <textarea id="importTextarea" rows="12" placeholder="Paste a list here, one item per line. Quantities like &quot;Cookies (x2)&quot; are read automatically."></textarea>
+    <div class="receipt-actions">
+      <button id="importAddBtn">Add pasted items</button>
+      <button id="importCancelBtn" class="secondary">Cancel</button>
+    </div>
+  </div>
 </div>
 <div id="noStoreMsg" class="empty">Add a store above to start a shopping list.</div>
 
@@ -446,6 +465,23 @@ let receiptReviewActive = false;
 let receiptLoading = false;
 let receiptCandidates = null;
 let receiptError = null;
+let importActive = false;
+
+function parsePastedList(text) {
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const items = [];
+  for (const line of lines) {
+    if (/^(shopping list|list)$/i.test(line)) continue;
+    if (/^[\w\s]+ shopping list$/i.test(line)) continue;
+    const match = line.match(/^(.*?)\s*\(x(\d+)\)\s*$/i);
+    if (match) {
+      items.push({ name: match[1].trim(), qty: parseInt(match[2], 10) || 1 });
+    } else {
+      items.push({ name: line, qty: 1 });
+    }
+  }
+  return items.filter(i => i.name);
+}
 
 function loadTesseractScript() {
   return new Promise((resolve, reject) => {
@@ -601,6 +637,7 @@ function render() {
       data.activeStore = name;
       editingIdx = null;
       receiptReviewActive = false;
+      importActive = false;
       saveData();
       render();
     });
@@ -653,16 +690,27 @@ function render() {
   const newWeekBtn = document.getElementById("newWeekBtn");
   const listActionsEl = document.querySelector(".list-actions");
   const receiptReviewEl = document.getElementById("receiptReview");
+  const importViewEl = document.getElementById("importView");
 
   if (receiptReviewActive) {
     addItemRow.style.display = "none";
     listActionsEl.style.display = "none";
     itemsEl.style.display = "none";
+    importViewEl.style.display = "none";
     receiptReviewEl.style.display = "block";
     renderReceiptReview(store, receiptReviewEl);
     return;
   }
   receiptReviewEl.style.display = "none";
+
+  if (importActive) {
+    addItemRow.style.display = "none";
+    listActionsEl.style.display = "none";
+    itemsEl.style.display = "none";
+    importViewEl.style.display = "block";
+    return;
+  }
+  importViewEl.style.display = "none";
   listActionsEl.style.display = "flex";
 
   const inHistoryView = !!data.historyView[data.activeStore];
@@ -870,6 +918,7 @@ document.getElementById("addStoreBtn").addEventListener("click", () => {
   data.activeStore = name;
   editingIdx = null;
   receiptReviewActive = false;
+  importActive = false;
   input.value = "";
   saveData();
   render();
@@ -995,6 +1044,36 @@ document.getElementById("receiptInput").addEventListener("change", async (e) => 
     receiptError = "Couldn't read that receipt: " + err.message;
   }
   receiptLoading = false;
+  render();
+});
+
+document.getElementById("importListBtn").addEventListener("click", () => {
+  if (!data.activeStore) return;
+  document.getElementById("importTextarea").value = "";
+  importActive = true;
+  render();
+  document.getElementById("importTextarea").focus();
+});
+
+document.getElementById("importAddBtn").addEventListener("click", () => {
+  if (!data.activeStore) return;
+  const textarea = document.getElementById("importTextarea");
+  const parsed = parsePastedList(textarea.value);
+  if (parsed.length === 0) {
+    alert("Didn't find any items in that text.");
+    return;
+  }
+  const store = data.stores[data.activeStore];
+  parsed.forEach(p => {
+    store.items.push({ name: p.name, qty: p.qty, category: "Other", checked: false });
+  });
+  importActive = false;
+  saveData();
+  render();
+});
+
+document.getElementById("importCancelBtn").addEventListener("click", () => {
+  importActive = false;
   render();
 });
 
