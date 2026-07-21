@@ -278,11 +278,49 @@
     color: inherit;
     margin-bottom: 0.75rem;
   }
+  .receipt-status {
+    padding: 1.5rem 0;
+    text-align: center;
+    opacity: 0.8;
+  }
+  .receipt-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid #8884;
+  }
+  .receipt-row input[type="text"] {
+    flex: 2;
+    min-width: 0;
+    padding: 0.4rem;
+    border: 1px solid #8888;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+  }
+  .receipt-row input[type="number"] {
+    width: 3.5rem;
+    padding: 0.4rem;
+    border: 1px solid #8888;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+  }
+  .receipt-row.unchecked input[type="text"],
+  .receipt-row.unchecked input[type="number"] {
+    opacity: 0.4;
+  }
+  .receipt-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
   .print-only {
     display: none;
   }
   @media print {
-    .add-store, #storeTabs, .add-item, .remove-btn, .list-actions, h1, #noStoreMsg, #calendarView {
+    .add-store, #storeTabs, .add-item, .remove-btn, .list-actions, h1, #noStoreMsg, #calendarView, #receiptReview {
       display: none !important;
     }
     .print-only {
@@ -317,6 +355,8 @@
       <button id="sortToggleBtn" class="secondary">Sort: Added order</button>
       <button id="historyToggleBtn" class="secondary">📅 Calendar</button>
       <button id="newWeekBtn" class="secondary">🗓️ Start new week</button>
+      <button id="scanReceiptBtn" class="secondary">📷 Scan receipt</button>
+      <input type="file" id="receiptInput" accept="image/*" capture="environment" style="display:none;">
     </div>
     <div>
       <button id="copyBtn" class="secondary">📋 Copy list</button>
@@ -326,6 +366,7 @@
   <h2 id="printStoreName" class="print-only"></h2>
   <ul id="items"></ul>
   <div id="calendarView" style="display:none;"></div>
+  <div id="receiptReview" style="display:none;"></div>
 </div>
 <div id="noStoreMsg" class="empty">Add a store above to start a shopping list.</div>
 
@@ -450,6 +491,148 @@ let data = loadData();
 let editingIdx = null;
 let calendarMonthOffset = 0;
 let selectedWeekKey = null;
+let receiptReviewActive = false;
+let receiptLoading = false;
+let receiptCandidates = null;
+let receiptError = null;
+
+function loadTesseractScript() {
+  return new Promise((resolve, reject) => {
+    if (window.Tesseract) return resolve();
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Couldn't load the OCR library — check your internet connection."));
+    document.head.appendChild(script);
+  });
+}
+
+function parseReceiptText(text) {
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const skipPatterns = [
+    /^(SUBTOTAL|TOTAL|TAX|CASH|CHANGE|DEBIT|CREDIT|VISA|MASTERCARD|AMEX|DISCOVER|BALANCE|TENDER|APPROVED|AUTH|REF|TERMINAL|MERCHANT|STORE|THANK YOU|CUSTOMER|RECEIPT|SAVINGS|COUPON|ITEMS? SOLD|QTY|AMOUNT|DATE|TIME|ORDER|CASHIER|MEMBER|SURVEY|SIGNATURE)/i,
+    /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/,
+    /^\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{4}$/,
+    /^[\d\s\-\$.,]+$/,
+  ];
+  const priceTrailingRegex = /\s*\$?\d+\.\d{2}\s*[A-Za-z]?\s*$/;
+
+  const candidates = [];
+  for (const line of lines) {
+    if (line.length < 2) continue;
+    if (skipPatterns.some(p => p.test(line))) continue;
+    let cleaned = line.replace(priceTrailingRegex, "").trim();
+    cleaned = cleaned.replace(/^\d{4,}\s+/, "");
+    cleaned = cleaned.replace(/[^\w\s&'\-.\(\)\/]/g, "").trim();
+    if (cleaned.length < 2) continue;
+    if (/^\d+$/.test(cleaned)) continue;
+    candidates.push(cleaned);
+  }
+  return [...new Set(candidates)];
+}
+
+function renderReceiptReview(store, container) {
+  container.innerHTML = "";
+
+  if (receiptLoading) {
+    const p = document.createElement("p");
+    p.className = "receipt-status";
+    p.textContent = "Reading receipt... this can take a moment.";
+    container.appendChild(p);
+    return;
+  }
+
+  if (receiptError) {
+    const p = document.createElement("p");
+    p.className = "receipt-status";
+    p.textContent = receiptError;
+    container.appendChild(p);
+
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "secondary";
+    closeBtn.textContent = "Close";
+    closeBtn.addEventListener("click", () => {
+      receiptReviewActive = false;
+      receiptError = null;
+      render();
+    });
+    container.appendChild(closeBtn);
+    return;
+  }
+
+  const heading = document.createElement("h2");
+  heading.textContent = "Review scanned items";
+  container.appendChild(heading);
+
+  if (!receiptCandidates || receiptCandidates.length === 0) {
+    const p = document.createElement("p");
+    p.className = "receipt-status";
+    p.textContent = "Couldn't find any items on that receipt. Try a clearer, well-lit photo.";
+    container.appendChild(p);
+  } else {
+    receiptCandidates.forEach((c, i) => {
+      const row = document.createElement("div");
+      row.className = "receipt-row" + (c.checked ? "" : " unchecked");
+
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = c.checked;
+      checkbox.addEventListener("change", () => {
+        c.checked = checkbox.checked;
+        row.classList.toggle("unchecked", !c.checked);
+      });
+
+      const nameInput = document.createElement("input");
+      nameInput.type = "text";
+      nameInput.value = c.name;
+      nameInput.addEventListener("input", () => {
+        c.name = nameInput.value;
+      });
+
+      const qtyInput = document.createElement("input");
+      qtyInput.type = "number";
+      qtyInput.min = "1";
+      qtyInput.value = c.qty;
+      qtyInput.addEventListener("input", () => {
+        c.qty = parseInt(qtyInput.value, 10) || 1;
+      });
+
+      row.appendChild(checkbox);
+      row.appendChild(nameInput);
+      row.appendChild(qtyInput);
+      container.appendChild(row);
+    });
+  }
+
+  const actions = document.createElement("div");
+  actions.className = "receipt-actions";
+
+  const addBtn = document.createElement("button");
+  addBtn.textContent = "Add checked items to list";
+  addBtn.addEventListener("click", () => {
+    const toAdd = (receiptCandidates || []).filter(c => c.checked && c.name.trim());
+    toAdd.forEach(c => {
+      store.items.push({ name: c.name.trim(), qty: c.qty || 1, category: "Other", checked: false });
+    });
+    receiptReviewActive = false;
+    receiptCandidates = null;
+    saveData();
+    render();
+  });
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.className = "secondary";
+  cancelBtn.textContent = "Cancel";
+  cancelBtn.addEventListener("click", () => {
+    receiptReviewActive = false;
+    receiptCandidates = null;
+    render();
+  });
+
+  actions.appendChild(addBtn);
+  actions.appendChild(cancelBtn);
+  container.appendChild(actions);
+}
 
 function getMonthGrid(year, month) {
   const firstOfMonth = new Date(year, month, 1);
@@ -632,6 +815,7 @@ function render() {
       editingIdx = null;
       calendarMonthOffset = 0;
       selectedWeekKey = null;
+      receiptReviewActive = false;
       saveData();
       render();
     });
@@ -686,7 +870,22 @@ function render() {
   const addItemRow = document.querySelector(".add-item");
   const sortBtn = document.getElementById("sortToggleBtn");
   const newWeekBtn = document.getElementById("newWeekBtn");
+  const listActionsEl = document.querySelector(".list-actions");
   const calendarViewEl = document.getElementById("calendarView");
+  const receiptReviewEl = document.getElementById("receiptReview");
+
+  if (receiptReviewActive) {
+    addItemRow.style.display = "none";
+    listActionsEl.style.display = "none";
+    itemsEl.style.display = "none";
+    calendarViewEl.style.display = "none";
+    receiptReviewEl.style.display = "block";
+    renderReceiptReview(store, receiptReviewEl);
+    return;
+  }
+  receiptReviewEl.style.display = "none";
+  listActionsEl.style.display = "flex";
+
   addItemRow.style.display = inHistoryView ? "none" : "flex";
   sortBtn.style.display = inHistoryView ? "none" : "inline-block";
   newWeekBtn.style.display = inHistoryView ? "none" : "inline-block";
@@ -849,6 +1048,7 @@ document.getElementById("addStoreBtn").addEventListener("click", () => {
   editingIdx = null;
   calendarMonthOffset = 0;
   selectedWeekKey = null;
+  receiptReviewActive = false;
   input.value = "";
   saveData();
   render();
@@ -950,6 +1150,33 @@ document.getElementById("newWeekBtn").addEventListener("click", () => {
   store.items = [];
   editingIdx = null;
   saveData();
+  render();
+});
+
+document.getElementById("scanReceiptBtn").addEventListener("click", () => {
+  document.getElementById("receiptInput").click();
+});
+
+document.getElementById("receiptInput").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file || !data.activeStore) return;
+
+  receiptReviewActive = true;
+  receiptLoading = true;
+  receiptError = null;
+  receiptCandidates = null;
+  render();
+
+  try {
+    await loadTesseractScript();
+    const { data: ocrData } = await Tesseract.recognize(file, "eng");
+    const names = parseReceiptText(ocrData.text);
+    receiptCandidates = names.map(name => ({ name, qty: 1, checked: true }));
+  } catch (err) {
+    receiptError = "Couldn't read that receipt: " + err.message;
+  }
+  receiptLoading = false;
   render();
 });
 
