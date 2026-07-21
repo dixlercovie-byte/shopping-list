@@ -516,6 +516,8 @@ function renderCalendarView(store, container) {
       addBackBtn.title = "Add back to current list";
       addBackBtn.addEventListener("click", () => {
         store.items.push({ name: item.name, qty: item.qty, category: item.category, checked: false });
+        data.historyView[data.activeStore] = false;
+        selectedWeekKey = null;
         saveData();
         render();
       });
