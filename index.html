@@ -171,6 +171,24 @@
   li.category-header:first-child {
     padding-top: 0.3rem !important;
   }
+  li.week-header {
+    font-weight: bold;
+    opacity: 0.8;
+    font-size: 0.9rem;
+    border-bottom: none !important;
+    padding-top: 1.2rem !important;
+  }
+  li.week-header:first-child {
+    padding-top: 0.3rem !important;
+  }
+  .add-back-btn {
+    background: transparent;
+    border: none;
+    color: #2f9e44;
+    cursor: pointer;
+    font-size: 1.2rem;
+    padding: 0 0.3rem;
+  }
   .print-only {
     display: none;
   }
@@ -206,7 +224,10 @@
     <button id="addItemBtn">Add</button>
   </div>
   <div class="list-actions">
-    <button id="sortToggleBtn" class="secondary">Sort: Added order</button>
+    <div>
+      <button id="sortToggleBtn" class="secondary">Sort: Added order</button>
+      <button id="historyToggleBtn" class="secondary">🕘 Past lists</button>
+    </div>
     <div>
       <button id="copyBtn" class="secondary">📋 Copy list</button>
       <button id="printBtn" class="secondary">🖨 Print this list</button>
@@ -237,7 +258,7 @@ function defaultData() {
   const item = (name, qty, category) => ({ name, qty, category: category || "Other", checked: false });
   return {
     stores: {
-      "Aldi": [
+      "Aldi": { items: [
         item("Eggs", 3, "Dairy & Eggs"),
         item("Milk", 1, "Dairy & Eggs"),
         item("Peanuts", 1, "Snacks"),
@@ -271,11 +292,26 @@ function defaultData() {
         item("100 calorie yogurts (blueberry/strawberry only)", 4, "Dairy & Eggs"),
         item("Cottage cheese", 2, "Dairy & Eggs"),
         item("Lime yogurt", 1, "Dairy & Eggs"),
-      ],
+      ], history: [] },
     },
     activeStore: "Aldi",
     sortMode: {},
+    historyView: {},
   };
+}
+
+function getWeekInfo(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const sunday = new Date(d);
+  sunday.setDate(d.getDate() - day);
+  sunday.setHours(0, 0, 0, 0);
+  const saturday = new Date(sunday);
+  saturday.setDate(sunday.getDate() + 6);
+  const key = sunday.toISOString().slice(0, 10);
+  const fmt = (dt) => dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const label = "Week of " + fmt(sunday) + " – " + fmt(saturday);
+  return { key, label };
 }
 
 function loadData() {
@@ -287,8 +323,18 @@ function loadData() {
     d = defaultData();
   }
   if (!d.sortMode) d.sortMode = {};
-  Object.values(d.stores).forEach(items => {
-    items.forEach(item => {
+  if (!d.historyView) d.historyView = {};
+  Object.keys(d.stores).forEach(name => {
+    const store = d.stores[name];
+    if (Array.isArray(store)) {
+      d.stores[name] = { items: store, history: [] };
+    } else {
+      if (!d.stores[name].items) d.stores[name].items = [];
+      if (!d.stores[name].history) d.stores[name].history = [];
+    }
+  });
+  Object.values(d.stores).forEach(store => {
+    store.items.forEach(item => {
       if (!item.category) item.category = "Other";
     });
   });
@@ -357,12 +403,66 @@ function render() {
   listSection.style.display = "block";
   document.getElementById("printStoreName").textContent = "Shopping List — " + data.activeStore;
 
-  const items = data.stores[data.activeStore];
+  const store = data.stores[data.activeStore];
+  const items = store.items;
   const itemsEl = document.getElementById("items");
   itemsEl.innerHTML = "";
 
-  const byCategory = data.sortMode[data.activeStore] === "category";
+  const inHistoryView = !!data.historyView[data.activeStore];
+  const historyBtn = document.getElementById("historyToggleBtn");
+  historyBtn.textContent = inHistoryView ? "← Back to list" : "🕘 Past lists";
+
+  const addItemRow = document.querySelector(".add-item");
   const sortBtn = document.getElementById("sortToggleBtn");
+  addItemRow.style.display = inHistoryView ? "none" : "flex";
+  sortBtn.style.display = inHistoryView ? "none" : "inline-block";
+
+  if (inHistoryView) {
+    if (!store.history || store.history.length === 0) {
+      const li = document.createElement("li");
+      li.className = "empty";
+      li.textContent = "No past items yet for " + data.activeStore + ".";
+      itemsEl.appendChild(li);
+      return;
+    }
+
+    store.history.forEach(bucket => {
+      const header = document.createElement("li");
+      header.className = "week-header";
+      header.textContent = bucket.label;
+      itemsEl.appendChild(header);
+
+      bucket.items.forEach(item => {
+        const li = document.createElement("li");
+
+        const nameSpan = document.createElement("span");
+        nameSpan.className = "name";
+        nameSpan.textContent = item.name;
+
+        const qtySpan = document.createElement("span");
+        qtySpan.className = "qty";
+        qtySpan.textContent = "x" + item.qty;
+
+        const addBackBtn = document.createElement("button");
+        addBackBtn.className = "add-back-btn";
+        addBackBtn.textContent = "+";
+        addBackBtn.title = "Add back to current list";
+        addBackBtn.addEventListener("click", () => {
+          store.items.push({ name: item.name, qty: item.qty, category: item.category, checked: false });
+          saveData();
+          render();
+        });
+
+        li.appendChild(nameSpan);
+        li.appendChild(qtySpan);
+        li.appendChild(addBackBtn);
+        itemsEl.appendChild(li);
+      });
+    });
+    return;
+  }
+
+  const byCategory = data.sortMode[data.activeStore] === "category";
   sortBtn.textContent = byCategory ? "Sort: By aisle/category" : "Sort: Added order";
 
   if (items.length === 0) {
@@ -399,7 +499,14 @@ function render() {
     removeBtn.textContent = "✕";
     removeBtn.title = "Remove";
     removeBtn.addEventListener("click", () => {
-      items.splice(idx, 1);
+      const [removed] = items.splice(idx, 1);
+      const { key, label } = getWeekInfo(new Date());
+      let bucket = store.history.find(h => h.week === key);
+      if (!bucket) {
+        bucket = { week: key, label, items: [] };
+        store.history.unshift(bucket);
+      }
+      bucket.items.push(removed);
       saveData();
       render();
     });
@@ -440,7 +547,7 @@ document.getElementById("addStoreBtn").addEventListener("click", () => {
   const name = input.value.trim();
   if (!name) return;
   if (!data.stores[name]) {
-    data.stores[name] = [];
+    data.stores[name] = { items: [], history: [] };
   }
   data.activeStore = name;
   input.value = "";
@@ -468,7 +575,7 @@ document.getElementById("addItemBtn").addEventListener("click", () => {
   const qty = parseInt(qtyInput.value, 10) || 1;
   const category = categorySelect.value || "Other";
   if (!name) return;
-  data.stores[data.activeStore].push({ name, qty, category, checked: false });
+  data.stores[data.activeStore].items.push({ name, qty, category, checked: false });
   nameInput.value = "";
   qtyInput.value = "1";
   nameInput.focus();
@@ -486,7 +593,7 @@ document.getElementById("printBtn").addEventListener("click", () => {
 
 document.getElementById("copyBtn").addEventListener("click", async () => {
   if (!data.activeStore) return;
-  const items = data.stores[data.activeStore];
+  const items = data.stores[data.activeStore].items;
   if (!items || items.length === 0) {
     alert("This store's list is empty — nothing to copy.");
     return;
@@ -513,6 +620,13 @@ document.getElementById("sortToggleBtn").addEventListener("click", () => {
   if (!data.activeStore) return;
   const current = data.sortMode[data.activeStore] === "category" ? "added" : "category";
   data.sortMode[data.activeStore] = current;
+  saveData();
+  render();
+});
+
+document.getElementById("historyToggleBtn").addEventListener("click", () => {
+  if (!data.activeStore) return;
+  data.historyView[data.activeStore] = !data.historyView[data.activeStore];
   saveData();
   render();
 });
