@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Shopping Lists</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#4a7dfc">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+  :root {
+    color-scheme: light dark;
+  }
+  body {
+    font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    max-width: 720px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+    background: Canvas;
+    color: CanvasText;
+  }
+  h1 { font-size: 1.5rem; }
+  .stores {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .store-tab-wrap {
+    display: flex;
+    align-items: center;
+    border: 1px solid #8888;
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .store-tab {
+    padding: 0.4rem 0.9rem;
+    border: none;
+    cursor: pointer;
+    background: transparent;
+    color: inherit;
+    font-size: 0.95rem;
+  }
+  .store-tab.active {
+    background: #4a7dfc;
+    color: white;
+  }
+  .store-delete-btn {
+    background: transparent;
+    border: none;
+    border-left: 1px solid #8888;
+    color: #e05555;
+    cursor: pointer;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.85rem;
+    line-height: 1;
+  }
+  .store-tab.active + .store-delete-btn {
+    border-left-color: #4a7dfc;
+  }
+  .add-store {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .add-store input {
+    flex: 1;
+    padding: 0.5rem;
+    border: 1px solid #8888;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+  }
+  .add-item {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  .add-item input[type="text"] {
+    flex: 3;
+    padding: 0.5rem;
+    border: 1px solid #8888;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+  }
+  .add-item input[type="number"] {
+    flex: 1;
+    width: 4rem;
+    padding: 0.5rem;
+    border: 1px solid #8888;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+  }
+  button {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 6px;
+    background: #4a7dfc;
+    color: white;
+    cursor: pointer;
+    font-size: 0.95rem;
+  }
+  button.secondary {
+    background: transparent;
+    border: 1px solid #8888;
+    color: inherit;
+  }
+  ul#items {
+    list-style: none;
+    padding: 0;
+  }
+  ul#items li {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #8884;
+  }
+  ul#items li.checked span.name {
+    text-decoration: line-through;
+    opacity: 0.5;
+  }
+  ul#items li .name {
+    flex: 1;
+  }
+  ul#items li .qty {
+    opacity: 0.7;
+    font-size: 0.9rem;
+  }
+  .remove-btn {
+    background: transparent;
+    border: none;
+    color: #e05555;
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 0 0.3rem;
+  }
+  .empty {
+    opacity: 0.6;
+    font-style: italic;
+    padding: 1rem 0;
+  }
+  .add-item select {
+    padding: 0.5rem;
+    border: 1px solid #8888;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+  }
+  .list-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+  li.category-header {
+    font-weight: bold;
+    opacity: 0.7;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    border-bottom: none !important;
+    padding-top: 1rem !important;
+  }
+  li.category-header:first-child {
+    padding-top: 0.3rem !important;
+  }
+  .print-only {
+    display: none;
+  }
+  @media print {
+    .add-store, #storeTabs, .add-item, .remove-btn, .list-actions, h1, #noStoreMsg {
+      display: none !important;
+    }
+    .print-only {
+      display: block;
+    }
+    ul#items li input[type="checkbox"] {
+      transform: scale(1.2);
+    }
+  }
+</style>
+</head>
+<body>
+
+<h1>Shopping Lists</h1>
+
+<div class="add-store">
+  <input type="text" id="newStoreName" placeholder="New store name (e.g. Costco)">
+  <button id="addStoreBtn">Add Store</button>
+</div>
+
+<div class="stores" id="storeTabs"></div>
+
+<div id="listSection" style="display:none;">
+  <div class="add-item">
+    <input type="text" id="itemName" placeholder="What do you need to buy?">
+    <input type="number" id="itemQty" min="1" value="1">
+    <select id="itemCategory"></select>
+    <button id="addItemBtn">Add</button>
+  </div>
+  <div class="list-actions">
+    <button id="sortToggleBtn" class="secondary">Sort: Added order</button>
+    <div>
+      <button id="copyBtn" class="secondary">📋 Copy list</button>
+      <button id="printBtn" class="secondary">🖨 Print this list</button>
+    </div>
+  </div>
+  <h2 id="printStoreName" class="print-only"></h2>
+  <ul id="items"></ul>
+</div>
+<div id="noStoreMsg" class="empty">Add a store above to start a shopping list.</div>
+
+<script>
+const STORAGE_KEY = "multiStoreShoppingLists";
+
+const CATEGORIES = [
+  "Produce",
+  "Dairy & Eggs",
+  "Bakery",
+  "Meat & Seafood",
+  "Pantry & Dry Goods",
+  "Snacks",
+  "Beverages",
+  "Frozen",
+  "Household",
+  "Other",
+];
+
+function defaultData() {
+  const item = (name, qty, category) => ({ name, qty, category: category || "Other", checked: false });
+  return {
+    stores: {
+      "Aldi": [
+        item("Eggs", 3, "Dairy & Eggs"),
+        item("Milk", 1, "Dairy & Eggs"),
+        item("Peanuts", 1, "Snacks"),
+        item("Almonds", 1, "Snacks"),
+        item("Raisins", 1, "Snacks"),
+        item("Round crackers", 1, "Snacks"),
+        item("Saltine crackers", 1, "Snacks"),
+        item("Peanut butter bar", 1, "Snacks"),
+        item("Cookies", 2, "Snacks"),
+        item("Bread", 1, "Bakery"),
+        item("Bagels", 1, "Bakery"),
+        item("Bananas (1 bunch)", 1, "Produce"),
+        item("Coleslaw mix", 2, "Produce"),
+        item("Mushrooms", 2, "Produce"),
+        item("Zucchini", 2, "Produce"),
+        item("Cucumbers", 1, "Produce"),
+        item("Baby carrots", 3, "Produce"),
+        item("Baby potatoes", 1, "Produce"),
+        item("Yukon gold potatoes", 1, "Produce"),
+        item("Fruit for dessert (cantaloupe/grapes/cherries)", 1, "Produce"),
+        item("Canned tuna", 6, "Pantry & Dry Goods"),
+        item("Brown sugar", 1, "Pantry & Dry Goods"),
+        item("Sugar", 1, "Pantry & Dry Goods"),
+        item("Flour", 1, "Pantry & Dry Goods"),
+        item("Fake sugar packets", 1, "Pantry & Dry Goods"),
+        item("Oil", 1, "Pantry & Dry Goods"),
+        item("Olive", 1, "Pantry & Dry Goods"),
+        item("Instant coffee", 1, "Beverages"),
+        item("Coffee grounds", 1, "Beverages"),
+        item("Plain Greek yogurt", 2, "Dairy & Eggs"),
+        item("100 calorie yogurts (blueberry/strawberry only)", 4, "Dairy & Eggs"),
+        item("Cottage cheese", 2, "Dairy & Eggs"),
+        item("Lime yogurt", 1, "Dairy & Eggs"),
+      ],
+    },
+    activeStore: "Aldi",
+    sortMode: {},
+  };
+}
+
+function loadData() {
+  let d;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    d = raw ? JSON.parse(raw) : defaultData();
+  } catch (e) {
+    d = defaultData();
+  }
+  if (!d.sortMode) d.sortMode = {};
+  Object.values(d.stores).forEach(items => {
+    items.forEach(item => {
+      if (!item.category) item.category = "Other";
+    });
+  });
+  return d;
+}
+
+function saveData() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+let data = loadData();
+
+function render() {
+  const tabsEl = document.getElementById("storeTabs");
+  const storeNames = Object.keys(data.stores);
+  tabsEl.innerHTML = "";
+
+  storeNames.forEach(name => {
+    const wrap = document.createElement("div");
+    wrap.className = "store-tab-wrap";
+
+    const btn = document.createElement("button");
+    btn.className = "store-tab" + (name === data.activeStore ? " active" : "");
+    btn.textContent = name;
+    btn.addEventListener("click", () => {
+      data.activeStore = name;
+      saveData();
+      render();
+    });
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "store-delete-btn";
+    deleteBtn.textContent = "✕";
+    deleteBtn.title = "Delete store";
+    deleteBtn.addEventListener("click", () => {
+      if (!confirm('Delete "' + name + '" and its shopping list? This cannot be undone.')) return;
+      delete data.stores[name];
+      if (data.activeStore === name) {
+        const remaining = Object.keys(data.stores);
+        data.activeStore = remaining.length ? remaining[0] : null;
+      }
+      saveData();
+      render();
+    });
+
+    wrap.appendChild(btn);
+    wrap.appendChild(deleteBtn);
+    tabsEl.appendChild(wrap);
+  });
+
+  const listSection = document.getElementById("listSection");
+  const noStoreMsg = document.getElementById("noStoreMsg");
+
+  if (!data.activeStore || !data.stores[data.activeStore]) {
+    listSection.style.display = "none";
+    noStoreMsg.style.display = storeNames.length ? "none" : "block";
+    if (storeNames.length && !data.activeStore) {
+      data.activeStore = storeNames[0];
+      saveData();
+      render();
+    }
+    return;
+  }
+
+  noStoreMsg.style.display = "none";
+  listSection.style.display = "block";
+  document.getElementById("printStoreName").textContent = "Shopping List — " + data.activeStore;
+
+  const items = data.stores[data.activeStore];
+  const itemsEl = document.getElementById("items");
+  itemsEl.innerHTML = "";
+
+  const byCategory = data.sortMode[data.activeStore] === "category";
+  const sortBtn = document.getElementById("sortToggleBtn");
+  sortBtn.textContent = byCategory ? "Sort: By aisle/category" : "Sort: Added order";
+
+  if (items.length === 0) {
+    const li = document.createElement("li");
+    li.className = "empty";
+    li.textContent = "No items yet for " + data.activeStore + ".";
+    itemsEl.appendChild(li);
+    return;
+  }
+
+  function makeItemRow(item, idx) {
+    const li = document.createElement("li");
+    if (item.checked) li.classList.add("checked");
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = !!item.checked;
+    checkbox.addEventListener("change", () => {
+      item.checked = checkbox.checked;
+      saveData();
+      render();
+    });
+
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "name";
+    nameSpan.textContent = item.name;
+
+    const qtySpan = document.createElement("span");
+    qtySpan.className = "qty";
+    qtySpan.textContent = "x" + item.qty;
+
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "remove-btn";
+    removeBtn.textContent = "✕";
+    removeBtn.title = "Remove";
+    removeBtn.addEventListener("click", () => {
+      items.splice(idx, 1);
+      saveData();
+      render();
+    });
+
+    li.appendChild(checkbox);
+    li.appendChild(nameSpan);
+    li.appendChild(qtySpan);
+    li.appendChild(removeBtn);
+    return li;
+  }
+
+  if (!byCategory) {
+    items.forEach((item, idx) => {
+      itemsEl.appendChild(makeItemRow(item, idx));
+    });
+    return;
+  }
+
+  CATEGORIES.forEach(category => {
+    const entries = items
+      .map((item, idx) => ({ item, idx }))
+      .filter(e => (e.item.category || "Other") === category);
+    if (entries.length === 0) return;
+
+    const header = document.createElement("li");
+    header.className = "category-header";
+    header.textContent = category;
+    itemsEl.appendChild(header);
+
+    entries.forEach(({ item, idx }) => {
+      itemsEl.appendChild(makeItemRow(item, idx));
+    });
+  });
+}
+
+document.getElementById("addStoreBtn").addEventListener("click", () => {
+  const input = document.getElementById("newStoreName");
+  const name = input.value.trim();
+  if (!name) return;
+  if (!data.stores[name]) {
+    data.stores[name] = [];
+  }
+  data.activeStore = name;
+  input.value = "";
+  saveData();
+  render();
+});
+
+document.getElementById("newStoreName").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("addStoreBtn").click();
+});
+
+const categorySelect = document.getElementById("itemCategory");
+CATEGORIES.forEach(category => {
+  const opt = document.createElement("option");
+  opt.value = category;
+  opt.textContent = category;
+  categorySelect.appendChild(opt);
+});
+
+document.getElementById("addItemBtn").addEventListener("click", () => {
+  if (!data.activeStore) return;
+  const nameInput = document.getElementById("itemName");
+  const qtyInput = document.getElementById("itemQty");
+  const name = nameInput.value.trim();
+  const qty = parseInt(qtyInput.value, 10) || 1;
+  const category = categorySelect.value || "Other";
+  if (!name) return;
+  data.stores[data.activeStore].push({ name, qty, category, checked: false });
+  nameInput.value = "";
+  qtyInput.value = "1";
+  nameInput.focus();
+  saveData();
+  render();
+});
+
+document.getElementById("itemName").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("addItemBtn").click();
+});
+
+document.getElementById("printBtn").addEventListener("click", () => {
+  window.print();
+});
+
+document.getElementById("copyBtn").addEventListener("click", async () => {
+  if (!data.activeStore) return;
+  const items = data.stores[data.activeStore];
+  if (!items || items.length === 0) {
+    alert("This store's list is empty — nothing to copy.");
+    return;
+  }
+
+  const lines = [data.activeStore + " Shopping List", ""];
+  lines.push(...items.map(item => "- " + item.name + " (x" + item.qty + ")"));
+  const text = lines.join("\n");
+
+  const copyBtn = document.getElementById("copyBtn");
+  const originalLabel = copyBtn.textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+    copyBtn.textContent = "Copied!";
+  } catch (err) {
+    copyBtn.textContent = "Copy failed";
+  }
+  setTimeout(() => {
+    copyBtn.textContent = originalLabel;
+  }, 1500);
+});
+
+document.getElementById("sortToggleBtn").addEventListener("click", () => {
+  if (!data.activeStore) return;
+  const current = data.sortMode[data.activeStore] === "category" ? "added" : "category";
+  data.sortMode[data.activeStore] = current;
+  saveData();
+  render();
+});
+
+render();
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch((err) => {
+      console.warn("Service worker registration failed:", err);
+    });
+  });
+}
+</script>
+
+</body>
+</html>
