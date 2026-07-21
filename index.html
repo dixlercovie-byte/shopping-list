@@ -189,6 +189,49 @@
     font-size: 1.2rem;
     padding: 0 0.3rem;
   }
+  .edit-btn {
+    background: transparent;
+    border: none;
+    color: inherit;
+    opacity: 0.6;
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 0 0.3rem;
+  }
+  .edit-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+  .edit-row input[type="text"] {
+    flex: 2;
+    min-width: 0;
+    padding: 0.4rem;
+    border: 1px solid #8888;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+  }
+  .edit-row input[type="number"] {
+    width: 3.5rem;
+    padding: 0.4rem;
+    border: 1px solid #8888;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+  }
+  .edit-row select {
+    padding: 0.4rem;
+    border: 1px solid #8888;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+  }
+  .edit-row button {
+    padding: 0.4rem 0.7rem;
+    font-size: 0.85rem;
+  }
   .print-only {
     display: none;
   }
@@ -227,6 +270,7 @@
     <div>
       <button id="sortToggleBtn" class="secondary">Sort: Added order</button>
       <button id="historyToggleBtn" class="secondary">🕘 Past lists</button>
+      <button id="newWeekBtn" class="secondary">🗓️ Start new week</button>
     </div>
     <div>
       <button id="copyBtn" class="secondary">📋 Copy list</button>
@@ -314,6 +358,16 @@ function getWeekInfo(date) {
   return { key, label };
 }
 
+function archiveItemToHistory(store, item) {
+  const { key, label } = getWeekInfo(new Date());
+  let bucket = store.history.find(h => h.week === key);
+  if (!bucket) {
+    bucket = { week: key, label, items: [] };
+    store.history.unshift(bucket);
+  }
+  bucket.items.push(item);
+}
+
 function loadData() {
   let d;
   try {
@@ -346,6 +400,7 @@ function saveData() {
 }
 
 let data = loadData();
+let editingIdx = null;
 
 function render() {
   const tabsEl = document.getElementById("storeTabs");
@@ -361,6 +416,7 @@ function render() {
     btn.textContent = name;
     btn.addEventListener("click", () => {
       data.activeStore = name;
+      editingIdx = null;
       saveData();
       render();
     });
@@ -414,8 +470,10 @@ function render() {
 
   const addItemRow = document.querySelector(".add-item");
   const sortBtn = document.getElementById("sortToggleBtn");
+  const newWeekBtn = document.getElementById("newWeekBtn");
   addItemRow.style.display = inHistoryView ? "none" : "flex";
   sortBtn.style.display = inHistoryView ? "none" : "inline-block";
+  newWeekBtn.style.display = inHistoryView ? "none" : "inline-block";
 
   if (inHistoryView) {
     if (!store.history || store.history.length === 0) {
@@ -475,6 +533,62 @@ function render() {
 
   function makeItemRow(item, idx) {
     const li = document.createElement("li");
+
+    if (editingIdx === idx) {
+      li.className = "edit-row";
+
+      const nameInput = document.createElement("input");
+      nameInput.type = "text";
+      nameInput.value = item.name;
+
+      const qtyInput = document.createElement("input");
+      qtyInput.type = "number";
+      qtyInput.min = "1";
+      qtyInput.value = item.qty;
+
+      const categoryEditSelect = document.createElement("select");
+      CATEGORIES.forEach(category => {
+        const opt = document.createElement("option");
+        opt.value = category;
+        opt.textContent = category;
+        if (category === (item.category || "Other")) opt.selected = true;
+        categoryEditSelect.appendChild(opt);
+      });
+
+      const saveBtn = document.createElement("button");
+      saveBtn.textContent = "Save";
+      saveBtn.addEventListener("click", () => {
+        const newName = nameInput.value.trim();
+        if (!newName) return;
+        item.name = newName;
+        item.qty = parseInt(qtyInput.value, 10) || 1;
+        item.category = categoryEditSelect.value || "Other";
+        editingIdx = null;
+        saveData();
+        render();
+      });
+
+      const cancelBtn = document.createElement("button");
+      cancelBtn.className = "secondary";
+      cancelBtn.textContent = "Cancel";
+      cancelBtn.addEventListener("click", () => {
+        editingIdx = null;
+        render();
+      });
+
+      nameInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") saveBtn.click();
+        if (e.key === "Escape") cancelBtn.click();
+      });
+
+      li.appendChild(nameInput);
+      li.appendChild(qtyInput);
+      li.appendChild(categoryEditSelect);
+      li.appendChild(saveBtn);
+      li.appendChild(cancelBtn);
+      return li;
+    }
+
     if (item.checked) li.classList.add("checked");
 
     const checkbox = document.createElement("input");
@@ -494,19 +608,22 @@ function render() {
     qtySpan.className = "qty";
     qtySpan.textContent = "x" + item.qty;
 
+    const editBtn = document.createElement("button");
+    editBtn.className = "edit-btn";
+    editBtn.textContent = "✎";
+    editBtn.title = "Edit";
+    editBtn.addEventListener("click", () => {
+      editingIdx = idx;
+      render();
+    });
+
     const removeBtn = document.createElement("button");
     removeBtn.className = "remove-btn";
     removeBtn.textContent = "✕";
     removeBtn.title = "Remove";
     removeBtn.addEventListener("click", () => {
       const [removed] = items.splice(idx, 1);
-      const { key, label } = getWeekInfo(new Date());
-      let bucket = store.history.find(h => h.week === key);
-      if (!bucket) {
-        bucket = { week: key, label, items: [] };
-        store.history.unshift(bucket);
-      }
-      bucket.items.push(removed);
+      archiveItemToHistory(store, removed);
       saveData();
       render();
     });
@@ -514,6 +631,7 @@ function render() {
     li.appendChild(checkbox);
     li.appendChild(nameSpan);
     li.appendChild(qtySpan);
+    li.appendChild(editBtn);
     li.appendChild(removeBtn);
     return li;
   }
@@ -550,6 +668,7 @@ document.getElementById("addStoreBtn").addEventListener("click", () => {
     data.stores[name] = { items: [], history: [] };
   }
   data.activeStore = name;
+  editingIdx = null;
   input.value = "";
   saveData();
   render();
@@ -620,6 +739,7 @@ document.getElementById("sortToggleBtn").addEventListener("click", () => {
   if (!data.activeStore) return;
   const current = data.sortMode[data.activeStore] === "category" ? "added" : "category";
   data.sortMode[data.activeStore] = current;
+  editingIdx = null;
   saveData();
   render();
 });
@@ -627,6 +747,26 @@ document.getElementById("sortToggleBtn").addEventListener("click", () => {
 document.getElementById("historyToggleBtn").addEventListener("click", () => {
   if (!data.activeStore) return;
   data.historyView[data.activeStore] = !data.historyView[data.activeStore];
+  editingIdx = null;
+  saveData();
+  render();
+});
+
+document.getElementById("newWeekBtn").addEventListener("click", () => {
+  if (!data.activeStore) return;
+  const store = data.stores[data.activeStore];
+  if (store.items.length === 0) {
+    alert("This list is already empty.");
+    return;
+  }
+  if (!confirm(
+    "Start a new week for " + data.activeStore + "? " +
+    "This moves all " + store.items.length + " items into this week's history and clears the active list."
+  )) return;
+
+  store.items.forEach(item => archiveItemToHistory(store, item));
+  store.items = [];
+  editingIdx = null;
   saveData();
   render();
 });
