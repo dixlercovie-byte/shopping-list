@@ -219,6 +219,41 @@
     color: white;
     border-color: #e05555;
   }
+  .undo-toast {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #222;
+    color: white;
+    padding: 0.7rem 1rem;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    z-index: 1000;
+    max-width: 90vw;
+  }
+  .undo-toast span {
+    font-size: 0.9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .undo-toast button {
+    background: transparent;
+    border: 1px solid #666;
+    color: #6cb2ff;
+    font-weight: bold;
+    padding: 0.3rem 0.7rem;
+    flex-shrink: 0;
+  }
+  @media print {
+    .undo-toast {
+      display: none !important;
+    }
+  }
   .list-actions {
     display: flex;
     justify-content: space-between;
@@ -407,6 +442,11 @@
 </head>
 <body>
 
+<div id="undoToast" class="undo-toast" style="display:none;">
+  <span id="undoToastText"></span>
+  <button id="undoBtn">Undo</button>
+</div>
+
 <h1>Shopping Lists</h1>
 
 <div class="add-store">
@@ -516,7 +556,7 @@ firebase.initializeApp(firebaseConfig);
 
 let syncCode = localStorage.getItem(SYNC_CODE_KEY) || null;
 let syncRef = null;
-let lastSyncedJson = null;
+let syncRev = 0;
 
 function generateSyncCode() {
   const chars = "abcdefghjkmnpqrstuvwxyz23456789";
@@ -529,8 +569,8 @@ function generateSyncCode() {
 
 function pushToFirebase() {
   if (!syncRef) return;
-  const json = JSON.stringify(data);
-  lastSyncedJson = json;
+  syncRev += 1;
+  data._rev = syncRev;
   syncRef.set(data);
 }
 
@@ -543,11 +583,11 @@ function connectSync(code) {
   syncRef.on("value", (snapshot) => {
     const remote = snapshot.val();
     if (remote) {
-      const remoteJson = JSON.stringify(remote);
-      if (remoteJson === lastSyncedJson) return;
+      const remoteRev = typeof remote._rev === "number" ? remote._rev : 0;
+      if (remoteRev <= syncRev) return;
       try {
         data = normalizeData(remote);
-        lastSyncedJson = remoteJson;
+        syncRev = remoteRev;
         editingIdx = null;
         render();
       } catch (e) {
@@ -563,7 +603,7 @@ function disconnectSync() {
   if (syncRef) syncRef.off();
   syncRef = null;
   syncCode = null;
-  lastSyncedJson = null;
+  syncRev = 0;
   localStorage.removeItem(SYNC_CODE_KEY);
 }
 
@@ -648,6 +688,7 @@ function archiveItemToHistory(store, item) {
     store.history.unshift(bucket);
   }
   bucket.items.push(item);
+  return bucket;
 }
 
 function normalizeData(d) {
@@ -705,6 +746,20 @@ let receiptCandidates = null;
 let receiptError = null;
 let importActive = false;
 let searchQuery = "";
+let pendingUndo = null;
+
+function showUndoToast(item, idx, storeName, bucket) {
+  if (pendingUndo && pendingUndo.timeoutId) clearTimeout(pendingUndo.timeoutId);
+  pendingUndo = { item, idx, storeName, bucket };
+  document.getElementById("undoToastText").textContent = "Removed \"" + item.name + "\"";
+  document.getElementById("undoToast").style.display = "flex";
+  pendingUndo.timeoutId = setTimeout(hideUndoToast, 5000);
+}
+
+function hideUndoToast() {
+  document.getElementById("undoToast").style.display = "none";
+  pendingUndo = null;
+}
 
 function parsePastedList(text) {
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
@@ -1150,9 +1205,10 @@ function render() {
     removeBtn.title = "Remove";
     removeBtn.addEventListener("click", () => {
       const [removed] = items.splice(idx, 1);
-      archiveItemToHistory(store, removed);
+      const bucket = archiveItemToHistory(store, removed);
       saveData();
       render();
+      showUndoToast(removed, idx, data.activeStore, bucket);
     });
 
     li.appendChild(checkbox);
@@ -1424,6 +1480,30 @@ document.getElementById("historyToggleBtn").addEventListener("click", () => {
 
 document.getElementById("scanReceiptBtn").addEventListener("click", () => {
   document.getElementById("receiptInput").click();
+});
+
+document.getElementById("undoBtn").addEventListener("click", () => {
+  if (!pendingUndo) return;
+  const { item, idx, storeName, bucket, timeoutId } = pendingUndo;
+  clearTimeout(timeoutId);
+
+  const store = data.stores[storeName];
+  if (store) {
+    if (bucket) {
+      const i = bucket.items.indexOf(item);
+      if (i !== -1) bucket.items.splice(i, 1);
+      if (bucket.items.length === 0) {
+        const bi = store.history.indexOf(bucket);
+        if (bi !== -1) store.history.splice(bi, 1);
+      }
+    }
+    const insertAt = Math.min(idx, store.items.length);
+    store.items.splice(insertAt, 0, item);
+  }
+
+  hideUndoToast();
+  saveData();
+  render();
 });
 
 document.getElementById("receiptInput").addEventListener("change", async (e) => {
