@@ -11,6 +11,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-database-compat.js"></script>
 <style>
   :root {
     color-scheme: light dark;
@@ -307,11 +309,20 @@
     font-family: monospace;
     font-size: 0.8rem;
   }
+  #joinSyncInput {
+    flex: 1;
+    padding: 0.5rem;
+    border: 1px solid #8888;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    font-family: monospace;
+  }
   .print-only {
     display: none;
   }
   @media print {
-    .add-store, #storeTabs, .add-item, .remove-btn, .list-actions, h1, #noStoreMsg, #receiptReview, #importView, #searchInput, .sync-row, #syncView {
+    .add-store, #storeTabs, .add-item, .remove-btn, .list-actions, h1, #noStoreMsg, #receiptReview, #importView, #searchInput, .sync-row, #syncView, #cloudSyncView {
       display: none !important;
     }
     .print-only {
@@ -337,6 +348,7 @@
 <div class="sync-row">
   <button id="exportDataBtn" class="secondary">📤 Export all data</button>
   <button id="importDataBtn" class="secondary">📥 Import all data</button>
+  <button id="cloudSyncBtn" class="secondary">🔄 Live sync</button>
 </div>
 <div id="syncView" style="display:none;">
   <p id="syncInstructions" class="empty"></p>
@@ -344,6 +356,27 @@
   <div class="receipt-actions">
     <button id="syncPrimaryBtn"></button>
     <button id="syncCancelBtn" class="secondary">Close</button>
+  </div>
+</div>
+<div id="cloudSyncView" style="display:none;">
+  <p id="cloudSyncStatus" class="empty"></p>
+  <div id="cloudSyncDisconnected">
+    <button id="startSyncBtn">Start new sync (use this device's list)</button>
+    <p style="margin: 1rem 0 0.3rem;">Or join a sync already started on another device:</p>
+    <div class="receipt-actions">
+      <input type="text" id="joinSyncInput" placeholder="Paste sync code">
+      <button id="joinSyncBtn">Join</button>
+    </div>
+  </div>
+  <div id="cloudSyncConnected" style="display:none;">
+    <p>Sync code: <strong id="cloudSyncCode"></strong></p>
+    <div class="receipt-actions">
+      <button id="copySyncCodeBtn" class="secondary">Copy code</button>
+      <button id="stopSyncBtn" class="secondary">Stop syncing</button>
+    </div>
+  </div>
+  <div class="receipt-actions">
+    <button id="cloudSyncCloseBtn" class="secondary">Close</button>
   </div>
 </div>
 
@@ -384,6 +417,72 @@
 
 <script>
 const STORAGE_KEY = "multiStoreShoppingLists";
+const SYNC_CODE_KEY = "multiStoreShoppingListsSyncCode";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCUfESGWMkMMSbWQq0ZsKnayFj79eRba2A",
+  authDomain: "shopping-list-e7cf4.firebaseapp.com",
+  databaseURL: "https://shopping-list-e7cf4-default-rtdb.firebaseio.com",
+  projectId: "shopping-list-e7cf4",
+  storageBucket: "shopping-list-e7cf4.firebasestorage.app",
+  messagingSenderId: "802851430312",
+  appId: "1:802851430312:web:b051cab63ebec95bdec79d",
+  measurementId: "G-RC3VBKZF30",
+};
+firebase.initializeApp(firebaseConfig);
+
+let syncCode = localStorage.getItem(SYNC_CODE_KEY) || null;
+let syncRef = null;
+let lastSyncedJson = null;
+
+function generateSyncCode() {
+  const chars = "abcdefghjkmnpqrstuvwxyz23456789";
+  let code = "";
+  for (let i = 0; i < 8; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
+}
+
+function pushToFirebase() {
+  if (!syncRef) return;
+  const json = JSON.stringify(data);
+  lastSyncedJson = json;
+  syncRef.set(data);
+}
+
+function connectSync(code) {
+  if (syncRef) syncRef.off();
+  syncCode = code;
+  localStorage.setItem(SYNC_CODE_KEY, code);
+  syncRef = firebase.database().ref("shoppingLists/" + code);
+
+  syncRef.on("value", (snapshot) => {
+    const remote = snapshot.val();
+    if (remote) {
+      const remoteJson = JSON.stringify(remote);
+      if (remoteJson === lastSyncedJson) return;
+      try {
+        data = normalizeData(remote);
+        lastSyncedJson = remoteJson;
+        editingIdx = null;
+        render();
+      } catch (e) {
+        console.warn("Ignored bad remote sync data:", e);
+      }
+    } else {
+      pushToFirebase();
+    }
+  });
+}
+
+function disconnectSync() {
+  if (syncRef) syncRef.off();
+  syncRef = null;
+  syncCode = null;
+  lastSyncedJson = null;
+  localStorage.removeItem(SYNC_CODE_KEY);
+}
 
 const CATEGORIES = [
   "Produce",
@@ -508,10 +607,15 @@ function loadData() {
 
 function saveData() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  pushToFirebase();
 }
 
 let data = loadData();
 let editingIdx = null;
+
+if (syncCode) {
+  connectSync(syncCode);
+}
 let receiptReviewActive = false;
 let receiptLoading = false;
 let receiptCandidates = null;
@@ -1234,6 +1338,67 @@ document.getElementById("syncPrimaryBtn").addEventListener("click", async () => 
   } catch (err) {
     alert("Couldn't load that data: " + err.message);
   }
+});
+
+function renderCloudSyncView() {
+  const status = document.getElementById("cloudSyncStatus");
+  const disconnectedEl = document.getElementById("cloudSyncDisconnected");
+  const connectedEl = document.getElementById("cloudSyncConnected");
+
+  if (syncCode) {
+    status.textContent = "This device is syncing live.";
+    disconnectedEl.style.display = "none";
+    connectedEl.style.display = "block";
+    document.getElementById("cloudSyncCode").textContent = syncCode;
+  } else {
+    status.textContent = "Not syncing yet.";
+    disconnectedEl.style.display = "block";
+    connectedEl.style.display = "none";
+  }
+}
+
+document.getElementById("cloudSyncBtn").addEventListener("click", () => {
+  document.getElementById("cloudSyncView").style.display = "block";
+  renderCloudSyncView();
+});
+
+document.getElementById("cloudSyncCloseBtn").addEventListener("click", () => {
+  document.getElementById("cloudSyncView").style.display = "none";
+});
+
+document.getElementById("startSyncBtn").addEventListener("click", () => {
+  const code = generateSyncCode();
+  connectSync(code);
+  pushToFirebase();
+  renderCloudSyncView();
+});
+
+document.getElementById("joinSyncBtn").addEventListener("click", () => {
+  const input = document.getElementById("joinSyncInput");
+  const code = input.value.trim().toLowerCase();
+  if (!code) return;
+  if (!confirm("Join sync code \"" + code + "\"? If that code already has data, it will replace everything in this browser.")) return;
+  connectSync(code);
+  input.value = "";
+  renderCloudSyncView();
+});
+
+document.getElementById("copySyncCodeBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("copySyncCodeBtn");
+  try {
+    await navigator.clipboard.writeText(syncCode);
+    const original = btn.textContent;
+    btn.textContent = "Copied!";
+    setTimeout(() => { btn.textContent = original; }, 1500);
+  } catch (err) {
+    alert("Couldn't copy automatically — the code is: " + syncCode);
+  }
+});
+
+document.getElementById("stopSyncBtn").addEventListener("click", () => {
+  if (!confirm("Stop syncing this device? Your current list stays here, but it will no longer update automatically.")) return;
+  disconnectSync();
+  renderCloudSyncView();
 });
 
 render();
