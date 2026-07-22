@@ -210,6 +210,15 @@
     background: transparent;
     color: inherit;
   }
+  #voiceBtn {
+    flex: 0 0 auto;
+    padding: 0.5rem 0.7rem;
+  }
+  #voiceBtn.listening {
+    background: #e05555;
+    color: white;
+    border-color: #e05555;
+  }
   .list-actions {
     display: flex;
     justify-content: space-between;
@@ -447,6 +456,7 @@
     <input type="text" id="itemName" placeholder="What do you need to buy?">
     <input type="number" id="itemQty" min="1" value="1">
     <select id="itemCategory"></select>
+    <button id="voiceBtn" class="secondary" title="Add by voice">🎤</button>
     <button id="addItemBtn">Add</button>
   </div>
   <input type="text" id="searchInput" placeholder="🔍 Search this list...">
@@ -1254,6 +1264,58 @@ document.getElementById("addItemBtn").addEventListener("click", () => {
 
 document.getElementById("itemName").addEventListener("keydown", (e) => {
   if (e.key === "Enter") document.getElementById("addItemBtn").click();
+});
+
+const WORD_NUMBERS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
+
+function parseVoiceText(text) {
+  const t = text.trim();
+  const match = t.match(/^(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(.+)$/i);
+  if (match) {
+    const numWord = match[1].toLowerCase();
+    const qty = /^\d+$/.test(numWord) ? parseInt(numWord, 10) : WORD_NUMBERS[numWord];
+    return { name: match[2].trim(), qty: qty || 1 };
+  }
+  return { name: t, qty: 1 };
+}
+
+const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+document.getElementById("voiceBtn").addEventListener("click", () => {
+  if (!SpeechRecognitionCtor) {
+    alert("Voice input isn't supported in this browser. It works in Chrome/Edge/Android browsers, but not in Safari (iPhone/Mac).");
+    return;
+  }
+  const voiceBtn = document.getElementById("voiceBtn");
+  const recognition = new SpeechRecognitionCtor();
+  recognition.lang = navigator.language || "en-US";
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = () => {
+    voiceBtn.classList.add("listening");
+    voiceBtn.textContent = "🎤...";
+  };
+
+  recognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript;
+    const { name, qty } = parseVoiceText(transcript);
+    document.getElementById("itemName").value = name;
+    document.getElementById("itemQty").value = qty;
+  };
+
+  recognition.onerror = (event) => {
+    if (event.error !== "no-speech" && event.error !== "aborted") {
+      alert("Voice input error: " + event.error);
+    }
+  };
+
+  recognition.onend = () => {
+    voiceBtn.classList.remove("listening");
+    voiceBtn.textContent = "🎤";
+  };
+
+  recognition.start();
 });
 
 document.getElementById("printBtn").addEventListener("click", () => {
