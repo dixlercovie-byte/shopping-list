@@ -168,21 +168,21 @@
       padding-top: 1rem;
     }
   }
-  ul#items li {
+  ul#items li, ul#checkedItems li {
     display: flex;
     align-items: center;
     gap: 0.6rem;
     padding: 0.5rem 0;
     border-bottom: 1px solid #8884;
   }
-  ul#items li.checked span.name {
+  ul#items li.checked span.name, ul#checkedItems li.checked span.name {
     text-decoration: line-through;
     opacity: 0.5;
   }
-  ul#items li .name {
+  ul#items li .name, ul#checkedItems li .name {
     flex: 1;
   }
-  ul#items li .qty {
+  ul#items li .qty, ul#checkedItems li .qty {
     opacity: 0.7;
     font-size: 0.9rem;
   }
