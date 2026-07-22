@@ -1009,8 +1009,13 @@ function render() {
     return;
   }
 
-  const byCategory = data.sortMode[data.activeStore] === "category";
-  sortBtn.textContent = byCategory ? "Sort: By aisle/category" : "Sort: Added order";
+  const currentSortMode = data.sortMode[data.activeStore] || "added";
+  const byCategory = currentSortMode === "category";
+  const byAlpha = currentSortMode === "alphabetical";
+  sortBtn.textContent =
+    byCategory ? "Sort: By aisle/category" :
+    byAlpha ? "Sort: Alphabetical" :
+    "Sort: Added order";
 
   const checkedItemsElEarly = document.getElementById("checkedItems");
   const listSideElEarly = document.getElementById("listSide");
@@ -1165,6 +1170,10 @@ function render() {
     .map((item, idx) => ({ item, idx }))
     .filter(e => visibleIdx.has(e.idx) && !e.item.checked);
 
+  if (byAlpha) {
+    visibleUnchecked.sort((a, b) => a.item.name.localeCompare(b.item.name));
+  }
+
   if (visibleUnchecked.length === 0) {
     const li = document.createElement("li");
     li.className = "empty";
@@ -1313,10 +1322,13 @@ document.getElementById("copyCheckedBtn").addEventListener("click", async () => 
   }, 1500);
 });
 
+const SORT_MODE_CYCLE = ["added", "category", "alphabetical"];
+
 document.getElementById("sortToggleBtn").addEventListener("click", () => {
   if (!data.activeStore) return;
-  const current = data.sortMode[data.activeStore] === "category" ? "added" : "category";
-  data.sortMode[data.activeStore] = current;
+  const currentIdx = SORT_MODE_CYCLE.indexOf(data.sortMode[data.activeStore]);
+  const next = SORT_MODE_CYCLE[(currentIdx + 1) % SORT_MODE_CYCLE.length];
+  data.sortMode[data.activeStore] = next;
   editingIdx = null;
   saveData();
   render();
