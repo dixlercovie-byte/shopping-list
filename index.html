@@ -123,9 +123,45 @@
     border: 1px solid #8888;
     color: inherit;
   }
-  ul#items {
+  ul#items, ul#checkedItems {
     list-style: none;
     padding: 0;
+  }
+  .list-columns {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+  }
+  .list-main {
+    flex: 1;
+    min-width: 0;
+  }
+  .list-side {
+    flex: 0 0 200px;
+    border-left: 1px solid #8884;
+    padding-left: 1rem;
+  }
+  .list-side.empty-side {
+    display: none;
+  }
+  .side-heading {
+    font-size: 0.9rem;
+    opacity: 0.7;
+    margin: 0 0 0.5rem;
+  }
+  @media (max-width: 640px) {
+    .list-columns {
+      flex-direction: column;
+    }
+    .list-side {
+      flex: 1 1 auto;
+      width: 100%;
+      box-sizing: border-box;
+      border-left: none;
+      border-top: 1px solid #8884;
+      padding-left: 0;
+      padding-top: 1rem;
+    }
   }
   ul#items li {
     display: flex;
@@ -322,7 +358,7 @@
     display: none;
   }
   @media print {
-    .add-store, #storeTabs, .add-item, .remove-btn, .list-actions, h1, #noStoreMsg, #receiptReview, #importView, #searchInput, .sync-row, #syncView, #cloudSyncView {
+    .add-store, #storeTabs, .add-item, .remove-btn, .list-actions, h1, #noStoreMsg, #receiptReview, #importView, #searchInput, .sync-row, #syncView, #cloudSyncView, .list-side {
       display: none !important;
     }
     .print-only {
@@ -403,7 +439,15 @@
     </div>
   </div>
   <h2 id="printStoreName" class="print-only"></h2>
-  <ul id="items"></ul>
+  <div class="list-columns" id="listColumns">
+    <div class="list-main">
+      <ul id="items"></ul>
+    </div>
+    <div class="list-side" id="listSide">
+      <h3 class="side-heading">✓ Checked off</h3>
+      <ul id="checkedItems"></ul>
+    </div>
+  </div>
   <div id="receiptReview" style="display:none;"></div>
   <div id="importView" style="display:none;">
     <textarea id="importTextarea" rows="12" placeholder="Paste a list here, one item per line. Quantities like &quot;Cookies (x2)&quot; are read automatically."></textarea>
@@ -852,10 +896,12 @@ function render() {
 
   const searchInputEl = document.getElementById("searchInput");
 
+  const listColumnsEl = document.getElementById("listColumns");
+
   if (receiptReviewActive) {
     addItemRow.style.display = "none";
     listActionsEl.style.display = "none";
-    itemsEl.style.display = "none";
+    listColumnsEl.style.display = "none";
     importViewEl.style.display = "none";
     searchInputEl.style.display = "none";
     receiptReviewEl.style.display = "block";
@@ -867,12 +913,13 @@ function render() {
   if (importActive) {
     addItemRow.style.display = "none";
     listActionsEl.style.display = "none";
-    itemsEl.style.display = "none";
+    listColumnsEl.style.display = "none";
     searchInputEl.style.display = "none";
     importViewEl.style.display = "block";
     return;
   }
   importViewEl.style.display = "none";
+  listColumnsEl.style.display = "flex";
   listActionsEl.style.display = "flex";
 
   const inHistoryView = !!data.historyView[data.activeStore];
@@ -884,6 +931,7 @@ function render() {
   newWeekBtn.style.display = inHistoryView ? "none" : "inline-block";
   searchInputEl.style.display = inHistoryView ? "none" : "block";
   itemsEl.style.display = "block";
+  document.getElementById("listSide").style.display = inHistoryView ? "none" : "";
 
   if (inHistoryView) {
     if (!store.history || store.history.length === 0) {
@@ -934,11 +982,16 @@ function render() {
   const byCategory = data.sortMode[data.activeStore] === "category";
   sortBtn.textContent = byCategory ? "Sort: By aisle/category" : "Sort: Added order";
 
+  const checkedItemsElEarly = document.getElementById("checkedItems");
+  const listSideElEarly = document.getElementById("listSide");
+
   if (items.length === 0) {
     const li = document.createElement("li");
     li.className = "empty";
     li.textContent = "No items yet for " + data.activeStore + ".";
     itemsEl.appendChild(li);
+    checkedItemsElEarly.innerHTML = "";
+    listSideElEarly.classList.add("empty-side");
     return;
   }
 
@@ -955,6 +1008,8 @@ function render() {
     li.className = "empty";
     li.textContent = "No items match \"" + searchQuery.trim() + "\".";
     itemsEl.appendChild(li);
+    checkedItemsElEarly.innerHTML = "";
+    listSideElEarly.classList.add("empty-side");
     return;
   }
 
@@ -1063,18 +1118,42 @@ function render() {
     return li;
   }
 
+  const checkedItemsEl = document.getElementById("checkedItems");
+  const listSideEl = document.getElementById("listSide");
+  checkedItemsEl.innerHTML = "";
+
+  const visibleChecked = items
+    .map((item, idx) => ({ item, idx }))
+    .filter(e => visibleIdx.has(e.idx) && e.item.checked);
+
+  listSideEl.classList.toggle("empty-side", visibleChecked.length === 0);
+  visibleChecked.forEach(({ item, idx }) => {
+    checkedItemsEl.appendChild(makeItemRow(item, idx));
+  });
+
+  const visibleUnchecked = items
+    .map((item, idx) => ({ item, idx }))
+    .filter(e => visibleIdx.has(e.idx) && !e.item.checked);
+
+  if (visibleUnchecked.length === 0) {
+    const li = document.createElement("li");
+    li.className = "empty";
+    li.textContent = visibleChecked.length > 0
+      ? "Everything's checked off!"
+      : "No items yet for " + data.activeStore + ".";
+    itemsEl.appendChild(li);
+    return;
+  }
+
   if (!byCategory) {
-    items.forEach((item, idx) => {
-      if (!visibleIdx.has(idx)) return;
+    visibleUnchecked.forEach(({ item, idx }) => {
       itemsEl.appendChild(makeItemRow(item, idx));
     });
     return;
   }
 
   CATEGORIES.forEach(category => {
-    const entries = items
-      .map((item, idx) => ({ item, idx }))
-      .filter(e => (e.item.category || "Other") === category && visibleIdx.has(e.idx));
+    const entries = visibleUnchecked.filter(e => (e.item.category || "Other") === category);
     if (entries.length === 0) return;
 
     const header = document.createElement("li");
