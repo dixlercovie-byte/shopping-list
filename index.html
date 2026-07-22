@@ -149,10 +149,14 @@
     opacity: 0.7;
     margin: 0 0 0.5rem;
   }
-  #printCheckedBtn {
+  #copyCheckedBtn, #printCheckedBtn {
     margin-top: 0.75rem;
     font-size: 0.85rem;
     padding: 0.4rem 0.7rem;
+    display: block;
+  }
+  #printCheckedBtn {
+    margin-top: 0.5rem;
   }
   @media (max-width: 640px) {
     .list-columns {
@@ -469,6 +473,7 @@
       <h3 class="side-heading">✓ Checked off</h3>
       <h2 id="printCheckedHeading" class="print-checked-only"></h2>
       <ul id="checkedItems"></ul>
+      <button id="copyCheckedBtn" class="secondary">📋 Copy checked items</button>
       <button id="printCheckedBtn" class="secondary">🖨 Print checked items</button>
     </div>
   </div>
@@ -1260,8 +1265,8 @@ document.getElementById("printCheckedBtn").addEventListener("click", () => {
 
 document.getElementById("copyBtn").addEventListener("click", async () => {
   if (!data.activeStore) return;
-  const items = data.stores[data.activeStore].items;
-  if (!items || items.length === 0) {
+  const items = (data.stores[data.activeStore].items || []).filter(item => !item.checked);
+  if (items.length === 0) {
     alert("This store's list is empty — nothing to copy.");
     return;
   }
@@ -1280,6 +1285,31 @@ document.getElementById("copyBtn").addEventListener("click", async () => {
   }
   setTimeout(() => {
     copyBtn.textContent = originalLabel;
+  }, 1500);
+});
+
+document.getElementById("copyCheckedBtn").addEventListener("click", async () => {
+  if (!data.activeStore) return;
+  const items = (data.stores[data.activeStore].items || []).filter(item => item.checked);
+  if (items.length === 0) {
+    alert("No checked-off items to copy yet.");
+    return;
+  }
+
+  const lines = ["Checked Off — " + data.activeStore, ""];
+  lines.push(...items.map(item => "- " + item.name + " (x" + item.qty + ")"));
+  const text = lines.join("\n");
+
+  const copyCheckedBtn = document.getElementById("copyCheckedBtn");
+  const originalLabel = copyCheckedBtn.textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+    copyCheckedBtn.textContent = "Copied!";
+  } catch (err) {
+    copyCheckedBtn.textContent = "Copy failed";
+  }
+  setTimeout(() => {
+    copyCheckedBtn.textContent = originalLabel;
   }, 1500);
 });
 
