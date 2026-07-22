@@ -179,12 +179,22 @@
     padding: 0.5rem 0;
     border-bottom: 1px solid #8884;
   }
-  ul#items li.checked span.name, ul#checkedItems li.checked span.name {
+  ul#items li.checked .name, ul#checkedItems li.checked .name {
     text-decoration: line-through;
     opacity: 0.5;
   }
   ul#items li .name, ul#checkedItems li .name {
     flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .item-note {
+    font-size: 0.75rem;
+    font-style: italic;
+    opacity: 0.6;
+    text-decoration: none !important;
+    white-space: normal;
   }
   ul#items li .qty, ul#checkedItems li .qty {
     opacity: 0.7;
@@ -1137,6 +1147,11 @@ function render() {
         categoryEditSelect.appendChild(opt);
       });
 
+      const noteInput = document.createElement("input");
+      noteInput.type = "text";
+      noteInput.placeholder = "Note (optional)";
+      noteInput.value = item.note || "";
+
       const saveBtn = document.createElement("button");
       saveBtn.textContent = "Save";
       saveBtn.addEventListener("click", () => {
@@ -1145,6 +1160,7 @@ function render() {
         item.name = newName;
         item.qty = parseInt(qtyInput.value, 10) || 1;
         item.category = categoryEditSelect.value || "Other";
+        item.note = noteInput.value.trim();
         editingIdx = null;
         saveData();
         render();
@@ -1162,10 +1178,15 @@ function render() {
         if (e.key === "Enter") saveBtn.click();
         if (e.key === "Escape") cancelBtn.click();
       });
+      noteInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") saveBtn.click();
+        if (e.key === "Escape") cancelBtn.click();
+      });
 
       li.appendChild(nameInput);
       li.appendChild(qtyInput);
       li.appendChild(categoryEditSelect);
+      li.appendChild(noteInput);
       li.appendChild(saveBtn);
       li.appendChild(cancelBtn);
       return li;
@@ -1182,9 +1203,17 @@ function render() {
       render();
     });
 
-    const nameSpan = document.createElement("span");
-    nameSpan.className = "name";
-    nameSpan.textContent = item.name;
+    const nameWrap = document.createElement("span");
+    nameWrap.className = "name";
+    const nameLine = document.createElement("span");
+    nameLine.textContent = item.name;
+    nameWrap.appendChild(nameLine);
+    if (item.note) {
+      const noteLine = document.createElement("span");
+      noteLine.className = "item-note";
+      noteLine.textContent = item.note;
+      nameWrap.appendChild(noteLine);
+    }
 
     const qtySpan = document.createElement("span");
     qtySpan.className = "qty";
@@ -1212,7 +1241,7 @@ function render() {
     });
 
     li.appendChild(checkbox);
-    li.appendChild(nameSpan);
+    li.appendChild(nameWrap);
     li.appendChild(qtySpan);
     li.appendChild(editBtn);
     li.appendChild(removeBtn);
