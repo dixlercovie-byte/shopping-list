@@ -149,6 +149,11 @@
     opacity: 0.7;
     margin: 0 0 0.5rem;
   }
+  #printCheckedBtn {
+    margin-top: 0.75rem;
+    font-size: 0.85rem;
+    padding: 0.4rem 0.7rem;
+  }
   @media (max-width: 640px) {
     .list-columns {
       flex-direction: column;
@@ -358,14 +363,31 @@
     display: none;
   }
   @media print {
-    .add-store, #storeTabs, .add-item, .remove-btn, .list-actions, h1, #noStoreMsg, #receiptReview, #importView, #searchInput, .sync-row, #syncView, #cloudSyncView, .list-side {
+    .add-store, #storeTabs, .add-item, .remove-btn, .edit-btn, .add-back-btn, .list-actions, h1, #noStoreMsg, #receiptReview, #importView, #searchInput, .sync-row, #syncView, #cloudSyncView, .list-side {
       display: none !important;
     }
     .print-only {
       display: block;
     }
-    ul#items li input[type="checkbox"] {
+    ul#items li input[type="checkbox"], ul#checkedItems li input[type="checkbox"] {
       transform: scale(1.2);
+    }
+    body.printing-checked .list-main {
+      display: none !important;
+    }
+    body.printing-checked .list-side {
+      display: block !important;
+      border: none;
+      padding: 0;
+    }
+    body.printing-checked .print-only {
+      display: none;
+    }
+    .print-checked-only {
+      display: none;
+    }
+    body.printing-checked .print-checked-only {
+      display: block;
     }
   }
 </style>
@@ -445,7 +467,9 @@
     </div>
     <div class="list-side" id="listSide">
       <h3 class="side-heading">✓ Checked off</h3>
+      <h2 id="printCheckedHeading" class="print-checked-only"></h2>
       <ul id="checkedItems"></ul>
+      <button id="printCheckedBtn" class="secondary">🖨 Print checked items</button>
     </div>
   </div>
   <div id="receiptReview" style="display:none;"></div>
@@ -881,6 +905,7 @@ function render() {
   noStoreMsg.style.display = "none";
   listSection.style.display = "block";
   document.getElementById("printStoreName").textContent = "Shopping List — " + data.activeStore;
+  document.getElementById("printCheckedHeading").textContent = "Checked Off — " + data.activeStore;
 
   const store = data.stores[data.activeStore];
   const items = store.items;
@@ -1219,6 +1244,18 @@ document.getElementById("itemName").addEventListener("keydown", (e) => {
 
 document.getElementById("printBtn").addEventListener("click", () => {
   window.print();
+});
+
+document.getElementById("printCheckedBtn").addEventListener("click", () => {
+  if (document.getElementById("checkedItems").children.length === 0) {
+    alert("No checked-off items to print yet.");
+    return;
+  }
+  document.body.classList.add("printing-checked");
+  window.print();
+  const cleanup = () => document.body.classList.remove("printing-checked");
+  window.addEventListener("afterprint", cleanup, { once: true });
+  setTimeout(cleanup, 3000);
 });
 
 document.getElementById("copyBtn").addEventListener("click", async () => {
