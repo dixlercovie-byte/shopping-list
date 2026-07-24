@@ -178,6 +178,7 @@
     gap: 0.6rem;
     padding: 0.5rem 0;
     border-bottom: 1px solid #8884;
+    touch-action: pan-y;
   }
   ul#items li.checked .name, ul#checkedItems li.checked .name {
     text-decoration: line-through;
@@ -950,6 +951,68 @@ function renderReceiptReview(store, container) {
   container.appendChild(actions);
 }
 
+function attachSwipeHandlers(li, checkbox, removeBtn) {
+  const threshold = 70;
+  const maxDrag = 120;
+  let startX = null;
+  let startY = null;
+  let currentX = 0;
+  let dragging = false;
+  let decided = false;
+  let horizontal = false;
+
+  li.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1) return;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    currentX = 0;
+    dragging = true;
+    decided = false;
+    horizontal = false;
+    li.style.transition = "none";
+  }, { passive: true });
+
+  li.addEventListener("touchmove", (e) => {
+    if (!dragging) return;
+    const dx = e.touches[0].clientX - startX;
+    const dy = e.touches[0].clientY - startY;
+    if (!decided) {
+      if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+        decided = true;
+        horizontal = Math.abs(dx) > Math.abs(dy);
+      }
+    }
+    if (decided && horizontal) {
+      e.preventDefault();
+      currentX = dx;
+      const clamped = Math.max(-maxDrag, Math.min(maxDrag, dx));
+      li.style.transform = "translateX(" + clamped + "px)";
+      li.style.background = clamped < 0 ? "rgba(224,85,85,0.15)" : clamped > 0 ? "rgba(47,158,68,0.15)" : "";
+    }
+  }, { passive: false });
+
+  li.addEventListener("touchend", () => {
+    if (!dragging) return;
+    dragging = false;
+    li.style.transition = "transform 0.2s ease, background 0.2s ease";
+    if (horizontal && currentX <= -threshold) {
+      removeBtn.click();
+    } else if (horizontal && currentX >= threshold) {
+      checkbox.click();
+    } else {
+      li.style.transform = "";
+      li.style.background = "";
+    }
+  });
+
+  li.addEventListener("touchcancel", () => {
+    dragging = false;
+    li.style.transition = "transform 0.2s ease, background 0.2s ease";
+    li.style.transform = "";
+    li.style.background = "";
+  });
+}
+
 function render() {
   const tabsEl = document.getElementById("storeTabs");
   const storeNames = Object.keys(data.stores);
@@ -1301,6 +1364,7 @@ function render() {
     li.appendChild(qtySpan);
     li.appendChild(editBtn);
     li.appendChild(removeBtn);
+    attachSwipeHandlers(li, checkbox, removeBtn);
     return li;
   }
 
