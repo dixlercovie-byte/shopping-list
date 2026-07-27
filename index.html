@@ -221,6 +221,17 @@
     font-size: 0.9rem;
     opacity: 0.85;
   }
+  .item-price {
+    font-size: 0.85rem;
+    opacity: 0.75;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+  }
+  .list-total {
+    font-size: 0.85rem;
+    opacity: 0.8;
+    margin-bottom: 0.5rem;
+  }
   @media print {
     .qty-btn {
       display: none !important;
@@ -589,6 +600,7 @@
     <button id="addItemBtn">Add</button>
   </div>
   <input type="text" id="searchInput" placeholder="🔍 Search this list...">
+  <p id="listTotal" class="list-total" style="display:none;"></p>
   <div class="list-actions">
     <div>
       <button id="sortToggleBtn" class="secondary">Sort: Added order</button>
@@ -619,6 +631,7 @@
     </div>
     <div class="list-side" id="listSide">
       <h3 class="side-heading">✓ Checked off</h3>
+      <p id="checkedTotal" class="list-total" style="display:none;"></p>
       <h2 id="printCheckedHeading" class="print-checked-only"></h2>
       <ul id="checkedItems"></ul>
       <button id="copyCheckedBtn" class="secondary">📋 Copy checked items</button>
@@ -1154,12 +1167,15 @@ function render() {
 
   const listColumnsEl = document.getElementById("listColumns");
 
+  const listTotalEl = document.getElementById("listTotal");
+
   if (receiptReviewActive) {
     addItemRow.style.display = "none";
     listActionsEl.style.display = "none";
     listColumnsEl.style.display = "none";
     importViewEl.style.display = "none";
     searchInputEl.style.display = "none";
+    listTotalEl.style.display = "none";
     receiptReviewEl.style.display = "block";
     renderReceiptReview(store, receiptReviewEl);
     return;
@@ -1171,6 +1187,7 @@ function render() {
     listActionsEl.style.display = "none";
     listColumnsEl.style.display = "none";
     searchInputEl.style.display = "none";
+    listTotalEl.style.display = "none";
     importViewEl.style.display = "block";
     return;
   }
@@ -1188,6 +1205,7 @@ function render() {
   searchInputEl.style.display = inHistoryView ? "none" : "block";
   itemsEl.style.display = "block";
   document.getElementById("listSide").style.display = inHistoryView ? "none" : "";
+  if (inHistoryView) listTotalEl.style.display = "none";
 
   if (inHistoryView) {
     if (!store.history || store.history.length === 0) {
@@ -1303,6 +1321,13 @@ function render() {
       noteInput.placeholder = "Note (optional)";
       noteInput.value = item.note || "";
 
+      const priceInput = document.createElement("input");
+      priceInput.type = "number";
+      priceInput.step = "0.01";
+      priceInput.min = "0";
+      priceInput.placeholder = "Price (optional)";
+      priceInput.value = item.price != null ? item.price : "";
+
       const saveBtn = document.createElement("button");
       saveBtn.textContent = "Save";
       saveBtn.addEventListener("click", () => {
@@ -1312,6 +1337,8 @@ function render() {
         item.qty = parseInt(qtyInput.value, 10) || 1;
         item.category = categoryEditSelect.value || "Other";
         item.note = noteInput.value.trim();
+        const parsedPrice = parseFloat(priceInput.value);
+        item.price = isNaN(parsedPrice) ? null : parsedPrice;
         editingIdx = null;
         saveData();
         render();
@@ -1333,11 +1360,16 @@ function render() {
         if (e.key === "Enter") saveBtn.click();
         if (e.key === "Escape") cancelBtn.click();
       });
+      priceInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") saveBtn.click();
+        if (e.key === "Escape") cancelBtn.click();
+      });
 
       li.appendChild(nameInput);
       li.appendChild(qtyInput);
       li.appendChild(categoryEditSelect);
       li.appendChild(noteInput);
+      li.appendChild(priceInput);
       li.appendChild(saveBtn);
       li.appendChild(cancelBtn);
       return li;
@@ -1401,6 +1433,13 @@ function render() {
     qtySpan.appendChild(qtyNum);
     qtySpan.appendChild(incBtn);
 
+    let priceSpan = null;
+    if (item.price != null) {
+      priceSpan = document.createElement("span");
+      priceSpan.className = "item-price";
+      priceSpan.textContent = "$" + (item.price * item.qty).toFixed(2);
+    }
+
     const editBtn = document.createElement("button");
     editBtn.className = "edit-btn";
     editBtn.textContent = "✎";
@@ -1425,6 +1464,7 @@ function render() {
     li.appendChild(checkbox);
     li.appendChild(nameWrap);
     li.appendChild(qtySpan);
+    if (priceSpan) li.appendChild(priceSpan);
     li.appendChild(editBtn);
     li.appendChild(removeBtn);
     attachSwipeHandlers(li, checkbox, removeBtn);
@@ -1444,12 +1484,34 @@ function render() {
     checkedItemsEl.appendChild(makeItemRow(item, idx));
   });
 
+  function priceTotal(entries) {
+    return entries.reduce((sum, e) => sum + (e.item.price != null ? e.item.price * e.item.qty : 0), 0);
+  }
+  function hasAnyPrice(entries) {
+    return entries.some(e => e.item.price != null);
+  }
+
+  const checkedTotalEl = document.getElementById("checkedTotal");
+  if (hasAnyPrice(visibleChecked)) {
+    checkedTotalEl.textContent = "Spent so far: $" + priceTotal(visibleChecked).toFixed(2);
+    checkedTotalEl.style.display = "block";
+  } else {
+    checkedTotalEl.style.display = "none";
+  }
+
   const visibleUnchecked = items
     .map((item, idx) => ({ item, idx }))
     .filter(e => visibleIdx.has(e.idx) && !e.item.checked);
 
   if (byAlpha) {
     visibleUnchecked.sort((a, b) => a.item.name.localeCompare(b.item.name));
+  }
+
+  if (hasAnyPrice(visibleUnchecked)) {
+    listTotalEl.textContent = "Estimated total: $" + priceTotal(visibleUnchecked).toFixed(2);
+    listTotalEl.style.display = "block";
+  } else {
+    listTotalEl.style.display = "none";
   }
 
   if (visibleUnchecked.length === 0) {
