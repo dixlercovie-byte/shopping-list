@@ -418,6 +418,52 @@
     font-family: inherit;
     font-size: 0.9rem;
   }
+  #shareLinkText {
+    flex: 1;
+    padding: 0.5rem;
+    border: 1px solid #8888;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    font-family: monospace;
+    font-size: 0.85rem;
+  }
+  #sharedViewPage {
+    max-width: 720px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+  }
+  #sharedViewItems {
+    list-style: none;
+    padding: 0;
+  }
+  #sharedViewItems li {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #8884;
+  }
+  #sharedViewItems li.checked span.name {
+    text-decoration: line-through;
+    opacity: 0.5;
+  }
+  #sharedViewItems li .name {
+    flex: 1;
+  }
+  #sharedViewItems li .qty {
+    opacity: 0.7;
+    font-size: 0.9rem;
+  }
+  #sharedViewItems li.category-header {
+    font-weight: bold;
+    opacity: 0.7;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    border-bottom: none;
+    padding-top: 1rem;
+  }
   .sync-row {
     display: flex;
     gap: 0.5rem;
@@ -483,6 +529,13 @@
   <button id="undoBtn">Undo</button>
 </div>
 
+<div id="sharedViewPage" style="display:none;">
+  <h1 id="sharedViewTitle">Shopping List</h1>
+  <p id="sharedViewMeta" class="empty"></p>
+  <ul id="sharedViewItems"></ul>
+</div>
+
+<div id="mainApp">
 <h1>Shopping Lists</h1>
 
 <div class="add-store">
@@ -548,6 +601,15 @@
     <div>
       <button id="copyBtn" class="secondary">📋 Copy list</button>
       <button id="printBtn" class="secondary">🖨 Print this list</button>
+      <button id="shareLinkBtn" class="secondary">🔗 Share view-only link</button>
+    </div>
+  </div>
+  <div id="shareLinkView" style="display:none;">
+    <p class="empty">Anyone with this link can view (but not edit) a snapshot of this list as of right now. It won't update if you change the list later — share again for a fresh copy.</p>
+    <div class="receipt-actions">
+      <input type="text" id="shareLinkText" readonly>
+      <button id="copyShareLinkBtn">Copy link</button>
+      <button id="shareLinkCloseBtn" class="secondary">Close</button>
     </div>
   </div>
   <h2 id="printStoreName" class="print-only"></h2>
@@ -573,6 +635,7 @@
   </div>
 </div>
 <div id="noStoreMsg" class="empty">Add a store above to start a shopping list.</div>
+</div>
 
 <script>
 const STORAGE_KEY = "multiStoreShoppingLists";
@@ -1849,6 +1912,115 @@ document.getElementById("stopSyncBtn").addEventListener("click", () => {
   disconnectSync();
   renderCloudSyncView();
 });
+
+document.getElementById("shareLinkBtn").addEventListener("click", () => {
+  if (!data.activeStore) return;
+  const store = data.stores[data.activeStore];
+  const items = (store.items || []).filter(item => !item.checked);
+  if (items.length === 0) {
+    alert("This list is empty — nothing to share.");
+    return;
+  }
+
+  const shareId = generateSyncCode();
+  const snapshot = {
+    storeName: data.activeStore,
+    sharedAt: Date.now(),
+    items: items.map(item => ({
+      name: item.name,
+      qty: item.qty,
+      category: item.category || "Other",
+    })),
+  };
+
+  firebase.database().ref("sharedLists/" + shareId).set(snapshot);
+
+  const url = location.origin + location.pathname + "?share=" + shareId;
+  document.getElementById("shareLinkText").value = url;
+  document.getElementById("shareLinkView").style.display = "block";
+});
+
+document.getElementById("copyShareLinkBtn").addEventListener("click", async () => {
+  const input = document.getElementById("shareLinkText");
+  const btn = document.getElementById("copyShareLinkBtn");
+  try {
+    await navigator.clipboard.writeText(input.value);
+    const original = btn.textContent;
+    btn.textContent = "Copied!";
+    setTimeout(() => { btn.textContent = original; }, 1500);
+  } catch (err) {
+    input.select();
+    alert("Couldn't copy automatically — the link is selected, copy it manually.");
+  }
+});
+
+document.getElementById("shareLinkCloseBtn").addEventListener("click", () => {
+  document.getElementById("shareLinkView").style.display = "none";
+});
+
+function renderSharedView(snapshot) {
+  document.getElementById("mainApp").style.display = "none";
+  document.getElementById("sharedViewPage").style.display = "block";
+
+  document.getElementById("sharedViewTitle").textContent = "Shopping List — " + (snapshot.storeName || "Shared list");
+  const sharedDate = snapshot.sharedAt ? new Date(snapshot.sharedAt).toLocaleString() : "";
+  document.getElementById("sharedViewMeta").textContent = sharedDate
+    ? "Shared " + sharedDate + " — view only"
+    : "View only";
+
+  const itemsEl = document.getElementById("sharedViewItems");
+  itemsEl.innerHTML = "";
+  const items = snapshot.items || [];
+
+  if (items.length === 0) {
+    const li = document.createElement("li");
+    li.textContent = "This list was empty when shared.";
+    itemsEl.appendChild(li);
+    return;
+  }
+
+  CATEGORIES.forEach(category => {
+    const entries = items.filter(item => (item.category || "Other") === category);
+    if (entries.length === 0) return;
+
+    const header = document.createElement("li");
+    header.className = "category-header";
+    header.textContent = category;
+    itemsEl.appendChild(header);
+
+    entries.forEach(item => {
+      const li = document.createElement("li");
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "name";
+      nameSpan.textContent = item.name;
+      const qtySpan = document.createElement("span");
+      qtySpan.className = "qty";
+      qtySpan.textContent = "x" + item.qty;
+      li.appendChild(nameSpan);
+      li.appendChild(qtySpan);
+      itemsEl.appendChild(li);
+    });
+  });
+}
+
+const shareIdFromUrl = new URLSearchParams(location.search).get("share");
+if (shareIdFromUrl) {
+  document.getElementById("mainApp").style.display = "none";
+  document.getElementById("sharedViewPage").style.display = "block";
+  document.getElementById("sharedViewMeta").textContent = "Loading...";
+  firebase.database().ref("sharedLists/" + shareIdFromUrl).once("value")
+    .then((snapshot) => {
+      const val = snapshot.val();
+      if (!val) {
+        document.getElementById("sharedViewMeta").textContent = "This shared link wasn't found — it may have been shared from a different link, or no longer exists.";
+        return;
+      }
+      renderSharedView(val);
+    })
+    .catch((err) => {
+      document.getElementById("sharedViewMeta").textContent = "Couldn't load this shared list: " + err.message;
+    });
+}
 
 render();
 
