@@ -592,6 +592,13 @@
 </div>
 
 <div id="listSection" style="display:none;">
+  <div id="listTabsWrap">
+    <div class="add-store">
+      <input type="text" id="newListName" placeholder="New list name (e.g. Party)">
+      <button id="addListBtn" class="secondary">+ Add list</button>
+    </div>
+    <div class="stores" id="listTabs"></div>
+  </div>
   <div class="add-item">
     <input type="text" id="itemName" placeholder="What do you need to buy?">
     <input type="number" id="itemQty" min="1" value="1">
@@ -736,7 +743,7 @@ function defaultData() {
   const item = (name, qty, category) => ({ name, qty, category: category || "Other", checked: false });
   return {
     stores: {
-      "Aldi": { items: [
+      "Aldi": { lists: { "Main": { items: [
         item("Eggs", 3, "Dairy & Eggs"),
         item("Milk", 1, "Dairy & Eggs"),
         item("Peanuts", 1, "Snacks"),
@@ -770,12 +777,22 @@ function defaultData() {
         item("100 calorie yogurts (blueberry/strawberry only)", 4, "Dairy & Eggs"),
         item("Cottage cheese", 2, "Dairy & Eggs"),
         item("Lime yogurt", 1, "Dairy & Eggs"),
-      ], history: [] },
+      ], history: [] } }, activeList: "Main" },
     },
     activeStore: "Aldi",
     sortMode: {},
     historyView: {},
   };
+}
+
+function getActiveList(storeName) {
+  const store = data.stores[storeName];
+  if (!store) return null;
+  return store.lists[store.activeList];
+}
+
+function settingsKey(storeName, listName) {
+  return storeName + "::" + listName;
 }
 
 function getWeekInfo(date) {
@@ -812,15 +829,38 @@ function normalizeData(d) {
   Object.keys(d.stores).forEach(name => {
     const store = d.stores[name];
     if (Array.isArray(store)) {
-      d.stores[name] = { items: store, history: [] };
+      // Oldest format: bare items array.
+      d.stores[name] = { lists: { "Main": { items: store, history: [] } }, activeList: "Main" };
+    } else if (!store.lists) {
+      // Pre-nested-lists format: items/history directly on the store.
+      const items = store.items || [];
+      const history = store.history || [];
+      d.stores[name] = { lists: { "Main": { items, history } }, activeList: "Main" };
+      if (d.sortMode[name] !== undefined) {
+        d.sortMode[settingsKey(name, "Main")] = d.sortMode[name];
+        delete d.sortMode[name];
+      }
+      if (d.historyView[name] !== undefined) {
+        d.historyView[settingsKey(name, "Main")] = d.historyView[name];
+        delete d.historyView[name];
+      }
     } else {
-      if (!d.stores[name].items) d.stores[name].items = [];
-      if (!d.stores[name].history) d.stores[name].history = [];
+      const listNames = Object.keys(store.lists);
+      if (listNames.length === 0) {
+        store.lists["Main"] = { items: [], history: [] };
+        store.activeList = "Main";
+      } else if (!store.activeList || !store.lists[store.activeList]) {
+        store.activeList = listNames[0];
+      }
     }
   });
   Object.values(d.stores).forEach(store => {
-    store.items.forEach(item => {
-      if (!item.category) item.category = "Other";
+    Object.values(store.lists).forEach(list => {
+      if (!list.items) list.items = [];
+      if (!list.history) list.history = [];
+      list.items.forEach(item => {
+        if (!item.category) item.category = "Other";
+      });
     });
   });
   if (!d.activeStore || !d.stores[d.activeStore]) {
@@ -860,9 +900,9 @@ let importActive = false;
 let searchQuery = "";
 let pendingUndo = null;
 
-function showUndoToast(item, idx, storeName, bucket) {
+function showUndoToast(item, idx, storeName, listName, bucket) {
   if (pendingUndo && pendingUndo.timeoutId) clearTimeout(pendingUndo.timeoutId);
-  pendingUndo = { item, idx, storeName, bucket };
+  pendingUndo = { item, idx, storeName, listName, bucket };
   document.getElementById("undoToastText").textContent = "Removed \"" + item.name + "\"";
   document.getElementById("undoToast").style.display = "flex";
   pendingUndo.timeoutId = setTimeout(hideUndoToast, 5000);
@@ -1089,6 +1129,51 @@ function attachSwipeHandlers(li, checkbox, removeBtn) {
   });
 }
 
+function renderListTabs(storeObj) {
+  const tabsEl = document.getElementById("listTabs");
+  tabsEl.innerHTML = "";
+  const listNames = Object.keys(storeObj.lists);
+
+  listNames.forEach(name => {
+    const wrap = document.createElement("div");
+    wrap.className = "store-tab-wrap";
+
+    const btn = document.createElement("button");
+    btn.className = "store-tab" + (name === storeObj.activeList ? " active" : "");
+    btn.textContent = name;
+    btn.addEventListener("click", () => {
+      storeObj.activeList = name;
+      editingIdx = null;
+      receiptReviewActive = false;
+      importActive = false;
+      searchQuery = "";
+      document.getElementById("searchInput").value = "";
+      saveData();
+      render();
+    });
+    wrap.appendChild(btn);
+
+    if (listNames.length > 1) {
+      const del = document.createElement("button");
+      del.className = "store-delete-btn";
+      del.textContent = "✕";
+      del.title = "Delete list";
+      del.addEventListener("click", () => {
+        if (!confirm('Delete list "' + name + '"? This cannot be undone.')) return;
+        delete storeObj.lists[name];
+        if (storeObj.activeList === name) {
+          storeObj.activeList = Object.keys(storeObj.lists)[0];
+        }
+        saveData();
+        render();
+      });
+      wrap.appendChild(del);
+    }
+
+    tabsEl.appendChild(wrap);
+  });
+}
+
 function render() {
   const tabsEl = document.getElementById("storeTabs");
   const storeNames = Object.keys(data.stores);
@@ -1148,10 +1233,17 @@ function render() {
 
   noStoreMsg.style.display = "none";
   listSection.style.display = "block";
-  document.getElementById("printStoreName").textContent = "Shopping List — " + data.activeStore;
-  document.getElementById("printCheckedHeading").textContent = "Checked Off — " + data.activeStore;
 
-  const store = data.stores[data.activeStore];
+  const storeObj = data.stores[data.activeStore];
+  renderListTabs(storeObj);
+
+  const listLabel = storeObj.activeList !== "Main"
+    ? data.activeStore + " — " + storeObj.activeList
+    : data.activeStore;
+  document.getElementById("printStoreName").textContent = "Shopping List — " + listLabel;
+  document.getElementById("printCheckedHeading").textContent = "Checked Off — " + listLabel;
+
+  const store = getActiveList(data.activeStore);
   const items = store.items;
   const itemsEl = document.getElementById("items");
   itemsEl.innerHTML = "";
@@ -1195,7 +1287,7 @@ function render() {
   listColumnsEl.style.display = "flex";
   listActionsEl.style.display = "flex";
 
-  const inHistoryView = !!data.historyView[data.activeStore];
+  const inHistoryView = !!data.historyView[settingsKey(data.activeStore, storeObj.activeList)];
   const historyBtn = document.getElementById("historyToggleBtn");
   historyBtn.textContent = inHistoryView ? "← Back to list" : "🕘 Past lists";
 
@@ -1239,7 +1331,7 @@ function render() {
         addBackBtn.title = "Add back to current list";
         addBackBtn.addEventListener("click", () => {
           store.items.push({ name: item.name, qty: item.qty, category: item.category, checked: false });
-          data.historyView[data.activeStore] = false;
+          data.historyView[settingsKey(data.activeStore, storeObj.activeList)] = false;
           saveData();
           render();
         });
@@ -1253,7 +1345,7 @@ function render() {
     return;
   }
 
-  const currentSortMode = data.sortMode[data.activeStore] || "added";
+  const currentSortMode = data.sortMode[settingsKey(data.activeStore, storeObj.activeList)] || "added";
   const byCategory = currentSortMode === "category";
   const byAlpha = currentSortMode === "alphabetical";
   sortBtn.textContent =
@@ -1458,7 +1550,7 @@ function render() {
       const bucket = archiveItemToHistory(store, removed);
       saveData();
       render();
-      showUndoToast(removed, idx, data.activeStore, bucket);
+      showUndoToast(removed, idx, data.activeStore, storeObj.activeList, bucket);
     });
 
     li.appendChild(checkbox);
@@ -1551,7 +1643,7 @@ document.getElementById("addStoreBtn").addEventListener("click", () => {
   const name = input.value.trim();
   if (!name) return;
   if (!data.stores[name]) {
-    data.stores[name] = { items: [], history: [] };
+    data.stores[name] = { lists: { "Main": { items: [], history: [] } }, activeList: "Main" };
   }
   data.activeStore = name;
   editingIdx = null;
@@ -1566,6 +1658,30 @@ document.getElementById("addStoreBtn").addEventListener("click", () => {
 
 document.getElementById("newStoreName").addEventListener("keydown", (e) => {
   if (e.key === "Enter") document.getElementById("addStoreBtn").click();
+});
+
+document.getElementById("addListBtn").addEventListener("click", () => {
+  if (!data.activeStore) return;
+  const input = document.getElementById("newListName");
+  const name = input.value.trim();
+  if (!name) return;
+  const storeObj = data.stores[data.activeStore];
+  if (!storeObj.lists[name]) {
+    storeObj.lists[name] = { items: [], history: [] };
+  }
+  storeObj.activeList = name;
+  editingIdx = null;
+  receiptReviewActive = false;
+  importActive = false;
+  searchQuery = "";
+  document.getElementById("searchInput").value = "";
+  input.value = "";
+  saveData();
+  render();
+});
+
+document.getElementById("newListName").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("addListBtn").click();
 });
 
 const categorySelect = document.getElementById("itemCategory");
@@ -1584,7 +1700,7 @@ document.getElementById("addItemBtn").addEventListener("click", () => {
   const qty = parseInt(qtyInput.value, 10) || 1;
   const category = categorySelect.value || "Other";
   if (!name) return;
-  data.stores[data.activeStore].items.push({ name, qty, category, checked: false });
+  getActiveList(data.activeStore).items.push({ name, qty, category, checked: false });
   nameInput.value = "";
   qtyInput.value = "1";
   nameInput.focus();
@@ -1666,7 +1782,7 @@ document.getElementById("printCheckedBtn").addEventListener("click", () => {
 
 document.getElementById("copyBtn").addEventListener("click", async () => {
   if (!data.activeStore) return;
-  const items = (data.stores[data.activeStore].items || []).filter(item => !item.checked);
+  const items = (getActiveList(data.activeStore).items || []).filter(item => !item.checked);
   if (items.length === 0) {
     alert("This store's list is empty — nothing to copy.");
     return;
@@ -1691,7 +1807,7 @@ document.getElementById("copyBtn").addEventListener("click", async () => {
 
 document.getElementById("copyCheckedBtn").addEventListener("click", async () => {
   if (!data.activeStore) return;
-  const items = (data.stores[data.activeStore].items || []).filter(item => item.checked);
+  const items = (getActiveList(data.activeStore).items || []).filter(item => item.checked);
   if (items.length === 0) {
     alert("No checked-off items to copy yet.");
     return;
@@ -1718,9 +1834,10 @@ const SORT_MODE_CYCLE = ["added", "category", "alphabetical"];
 
 document.getElementById("sortToggleBtn").addEventListener("click", () => {
   if (!data.activeStore) return;
-  const currentIdx = SORT_MODE_CYCLE.indexOf(data.sortMode[data.activeStore]);
+  const key = settingsKey(data.activeStore, data.stores[data.activeStore].activeList);
+  const currentIdx = SORT_MODE_CYCLE.indexOf(data.sortMode[key]);
   const next = SORT_MODE_CYCLE[(currentIdx + 1) % SORT_MODE_CYCLE.length];
-  data.sortMode[data.activeStore] = next;
+  data.sortMode[key] = next;
   editingIdx = null;
   saveData();
   render();
@@ -1728,7 +1845,7 @@ document.getElementById("sortToggleBtn").addEventListener("click", () => {
 
 document.getElementById("newWeekBtn").addEventListener("click", () => {
   if (!data.activeStore) return;
-  const store = data.stores[data.activeStore];
+  const store = getActiveList(data.activeStore);
   if (store.items.length === 0) {
     alert("This list is already empty.");
     return;
@@ -1746,7 +1863,8 @@ document.getElementById("newWeekBtn").addEventListener("click", () => {
 
 document.getElementById("historyToggleBtn").addEventListener("click", () => {
   if (!data.activeStore) return;
-  data.historyView[data.activeStore] = !data.historyView[data.activeStore];
+  const key = settingsKey(data.activeStore, data.stores[data.activeStore].activeList);
+  data.historyView[key] = !data.historyView[key];
   editingIdx = null;
   saveData();
   render();
@@ -1758,10 +1876,11 @@ document.getElementById("scanReceiptBtn").addEventListener("click", () => {
 
 document.getElementById("undoBtn").addEventListener("click", () => {
   if (!pendingUndo) return;
-  const { item, idx, storeName, bucket, timeoutId } = pendingUndo;
+  const { item, idx, storeName, listName, bucket, timeoutId } = pendingUndo;
   clearTimeout(timeoutId);
 
-  const store = data.stores[storeName];
+  const storeObj = data.stores[storeName];
+  const store = storeObj ? storeObj.lists[listName] : null;
   if (store) {
     if (bucket) {
       const i = bucket.items.indexOf(item);
@@ -1819,7 +1938,7 @@ document.getElementById("importAddBtn").addEventListener("click", () => {
     alert("Didn't find any items in that text.");
     return;
   }
-  const store = data.stores[data.activeStore];
+  const store = getActiveList(data.activeStore);
   parsed.forEach(p => {
     store.items.push({ name: p.name, qty: p.qty, category: "Other", checked: false });
   });
@@ -1977,7 +2096,8 @@ document.getElementById("stopSyncBtn").addEventListener("click", () => {
 
 document.getElementById("shareLinkBtn").addEventListener("click", () => {
   if (!data.activeStore) return;
-  const store = data.stores[data.activeStore];
+  const storeObj = data.stores[data.activeStore];
+  const store = getActiveList(data.activeStore);
   const items = (store.items || []).filter(item => !item.checked);
   if (items.length === 0) {
     alert("This list is empty — nothing to share.");
@@ -1986,7 +2106,7 @@ document.getElementById("shareLinkBtn").addEventListener("click", () => {
 
   const shareId = generateSyncCode();
   const snapshot = {
-    storeName: data.activeStore,
+    storeName: storeObj.activeList !== "Main" ? data.activeStore + " — " + storeObj.activeList : data.activeStore,
     sharedAt: Date.now(),
     items: items.map(item => ({
       name: item.name,
