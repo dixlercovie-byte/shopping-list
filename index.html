@@ -376,6 +376,36 @@
     padding: 0.4rem 0.7rem;
     font-size: 0.85rem;
   }
+  .favorites-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  .favorite-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.6rem;
+    border: 1px solid #8888;
+    border-radius: 999px;
+    background: transparent;
+    color: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .favorite-chip:hover {
+    background: #4a7dfc22;
+  }
+  .favorite-chip .unfav-btn {
+    background: transparent;
+    border: none;
+    color: #e05555;
+    cursor: pointer;
+    padding: 0;
+    font-size: 0.9rem;
+    line-height: 1;
+  }
   .receipt-status {
     padding: 1.5rem 0;
     text-align: center;
@@ -596,6 +626,7 @@
     </div>
     <div class="stores" id="listTabs"></div>
   </div>
+  <div id="favoritesRow" class="favorites-row" style="display:none;"></div>
   <div class="add-item">
     <input type="text" id="itemName" placeholder="What do you need to buy?">
     <input type="number" id="itemQty" min="1" value="1">
@@ -774,7 +805,7 @@ function defaultData() {
         item("100 calorie yogurts (blueberry/strawberry only)", 4, "Dairy & Eggs"),
         item("Cottage cheese", 2, "Dairy & Eggs"),
         item("Lime yogurt", 1, "Dairy & Eggs"),
-      ], history: [] } }, activeList: "Main" },
+      ], history: [] } }, activeList: "Main", favorites: [] },
     },
     activeStore: "Aldi",
     sortMode: {},
@@ -852,6 +883,7 @@ function normalizeData(d) {
     }
   });
   Object.values(d.stores).forEach(store => {
+    if (!store.favorites) store.favorites = [];
     Object.values(store.lists).forEach(list => {
       if (!list.items) list.items = [];
       if (!list.history) list.history = [];
@@ -1171,6 +1203,50 @@ function renderListTabs(storeObj) {
   });
 }
 
+function renderFavoritesRow(storeObj) {
+  const rowEl = document.getElementById("favoritesRow");
+  rowEl.innerHTML = "";
+
+  const favorites = storeObj.favorites || [];
+  if (favorites.length === 0) {
+    rowEl.style.display = "none";
+    return;
+  }
+  rowEl.style.display = "flex";
+
+  favorites.forEach((fav, favIdx) => {
+    const chip = document.createElement("button");
+    chip.className = "favorite-chip";
+    chip.type = "button";
+
+    const label = document.createElement("span");
+    label.textContent = "⭐ " + fav.name;
+    chip.appendChild(label);
+
+    const unfavBtn = document.createElement("button");
+    unfavBtn.className = "unfav-btn";
+    unfavBtn.type = "button";
+    unfavBtn.textContent = "✕";
+    unfavBtn.title = "Remove from favorites";
+    unfavBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      storeObj.favorites.splice(favIdx, 1);
+      saveData();
+      render();
+    });
+    chip.appendChild(unfavBtn);
+
+    chip.addEventListener("click", () => {
+      const list = getActiveList(data.activeStore);
+      list.items.push({ name: fav.name, qty: fav.qty, category: fav.category || "Other", checked: false });
+      saveData();
+      render();
+    });
+
+    rowEl.appendChild(chip);
+  });
+}
+
 function render() {
   const tabsEl = document.getElementById("storeTabs");
   const storeNames = Object.keys(data.stores);
@@ -1233,6 +1309,7 @@ function render() {
 
   const storeObj = data.stores[data.activeStore];
   renderListTabs(storeObj);
+  renderFavoritesRow(storeObj);
 
   const listLabel = storeObj.activeList !== "Main"
     ? data.activeStore + " — " + storeObj.activeList
@@ -1258,6 +1335,8 @@ function render() {
 
   const listTotalEl = document.getElementById("listTotal");
 
+  const favoritesRowEl = document.getElementById("favoritesRow");
+
   if (receiptReviewActive) {
     addItemRow.style.display = "none";
     listActionsEl.style.display = "none";
@@ -1265,6 +1344,7 @@ function render() {
     importViewEl.style.display = "none";
     searchInputEl.style.display = "none";
     listTotalEl.style.display = "none";
+    favoritesRowEl.style.display = "none";
     receiptReviewEl.style.display = "block";
     renderReceiptReview(store, receiptReviewEl);
     return;
@@ -1277,6 +1357,7 @@ function render() {
     listColumnsEl.style.display = "none";
     searchInputEl.style.display = "none";
     listTotalEl.style.display = "none";
+    favoritesRowEl.style.display = "none";
     importViewEl.style.display = "block";
     return;
   }
@@ -1294,7 +1375,10 @@ function render() {
   searchInputEl.style.display = inHistoryView ? "none" : "block";
   itemsEl.style.display = "block";
   document.getElementById("listSide").style.display = inHistoryView ? "none" : "";
-  if (inHistoryView) listTotalEl.style.display = "none";
+  if (inHistoryView) {
+    listTotalEl.style.display = "none";
+    favoritesRowEl.style.display = "none";
+  }
 
   if (inHistoryView) {
     if (!store.history || store.history.length === 0) {
@@ -1454,11 +1538,33 @@ function render() {
         if (e.key === "Escape") cancelBtn.click();
       });
 
+      const favBtn = document.createElement("button");
+      favBtn.className = "secondary";
+      favBtn.textContent = "⭐ Save as favorite";
+      favBtn.addEventListener("click", () => {
+        const favName = nameInput.value.trim();
+        if (!favName) return;
+        const favQty = parseInt(qtyInput.value, 10) || 1;
+        const favCategory = categoryEditSelect.value || "Other";
+        const existing = storeObj.favorites.find(f => f.name.toLowerCase() === favName.toLowerCase());
+        if (existing) {
+          existing.qty = favQty;
+          existing.category = favCategory;
+        } else {
+          storeObj.favorites.push({ name: favName, qty: favQty, category: favCategory });
+        }
+        saveData();
+        const original = favBtn.textContent;
+        favBtn.textContent = "⭐ Saved!";
+        setTimeout(() => { favBtn.textContent = original; }, 1200);
+      });
+
       li.appendChild(nameInput);
       li.appendChild(qtyInput);
       li.appendChild(categoryEditSelect);
       li.appendChild(noteInput);
       li.appendChild(priceInput);
+      li.appendChild(favBtn);
       li.appendChild(saveBtn);
       li.appendChild(cancelBtn);
       return li;
