@@ -344,35 +344,46 @@
   }
   .edit-row {
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    align-items: stretch;
     gap: 0.4rem;
-    flex-wrap: wrap;
+    padding: 0.6rem 0;
   }
   .edit-row input[type="text"] {
-    flex: 2;
-    min-width: 0;
-    padding: 0.4rem;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.5rem;
+    font-size: 1rem;
     border: 1px solid #8888;
     border-radius: 6px;
     background: transparent;
     color: inherit;
   }
   .edit-row input[type="number"] {
-    width: 3.5rem;
-    padding: 0.4rem;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.5rem;
     border: 1px solid #8888;
     border-radius: 6px;
     background: transparent;
     color: inherit;
   }
   .edit-row select {
-    padding: 0.4rem;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.5rem;
     border: 1px solid #8888;
     border-radius: 6px;
     background: transparent;
     color: inherit;
   }
-  .edit-row button {
+  .edit-row-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.2rem;
+  }
+  .edit-row-buttons button {
     padding: 0.4rem 0.7rem;
     font-size: 0.85rem;
   }
@@ -1473,11 +1484,13 @@ function render() {
 
       const nameInput = document.createElement("input");
       nameInput.type = "text";
+      nameInput.placeholder = "Item name";
       nameInput.value = item.name;
 
       const qtyInput = document.createElement("input");
       qtyInput.type = "number";
       qtyInput.min = "1";
+      qtyInput.placeholder = "Quantity";
       qtyInput.value = item.qty;
 
       const categoryEditSelect = document.createElement("select");
@@ -1559,14 +1572,18 @@ function render() {
         setTimeout(() => { favBtn.textContent = original; }, 1200);
       });
 
+      const buttonsWrap = document.createElement("div");
+      buttonsWrap.className = "edit-row-buttons";
+      buttonsWrap.appendChild(favBtn);
+      buttonsWrap.appendChild(saveBtn);
+      buttonsWrap.appendChild(cancelBtn);
+
       li.appendChild(nameInput);
       li.appendChild(qtyInput);
       li.appendChild(categoryEditSelect);
       li.appendChild(noteInput);
       li.appendChild(priceInput);
-      li.appendChild(favBtn);
-      li.appendChild(saveBtn);
-      li.appendChild(cancelBtn);
+      li.appendChild(buttonsWrap);
       return li;
     }
 
