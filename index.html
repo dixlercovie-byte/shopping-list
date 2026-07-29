@@ -1199,6 +1199,12 @@ function renderListTabs(storeObj) {
   tabsEl.innerHTML = "";
   const listNames = Object.keys(storeObj.lists);
 
+  if (listNames.length <= 1) {
+    tabsEl.style.display = "none";
+    return;
+  }
+  tabsEl.style.display = "flex";
+
   listNames.forEach(name => {
     const wrap = document.createElement("div");
     wrap.className = "store-tab-wrap";
