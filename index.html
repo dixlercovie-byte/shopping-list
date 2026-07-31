@@ -262,6 +262,11 @@
     color: white;
     border-color: #e05555;
   }
+  .voice-status {
+    margin: -0.5rem 0 0.8rem;
+    font-size: 0.85rem;
+    opacity: 0.8;
+  }
   .undo-toast {
     position: fixed;
     bottom: 1.5rem;
@@ -554,7 +559,7 @@
     display: none;
   }
   @media print {
-    .add-store, #storeTabs, .add-item, .remove-btn, .edit-btn, .add-back-btn, .list-actions, h1, #noStoreMsg, #receiptReview, #importView, #searchInput, .sync-row, #cloudSyncView, #qrCodeView, .list-side, #artifactLink, #aldiAdsLink, #dollarTreeLink, #dollarTreeSearchRow {
+    .add-store, #storeTabs, .add-item, .remove-btn, .edit-btn, .add-back-btn, .list-actions, h1, #noStoreMsg, #receiptReview, #importView, #searchInput, .sync-row, #cloudSyncView, #qrCodeView, #voiceStatus, .list-side, #artifactLink, #aldiAdsLink, #dollarTreeLink, #dollarTreeSearchRow {
       display: none !important;
     }
     .print-only {
@@ -686,9 +691,10 @@
     <input type="text" id="itemName" placeholder="What do you need to buy?">
     <input type="number" id="itemQty" min="1" value="1">
     <select id="itemCategory"></select>
-    <button id="voiceBtn" class="secondary" title="Add by voice">🎤</button>
+    <button id="voiceBtn" class="secondary" title='Voice commands: "add milk", "check off eggs", "uncheck eggs", "remove bananas"'>🎤</button>
     <button id="addItemBtn">Add</button>
   </div>
+  <p id="voiceStatus" class="voice-status" style="display:none;"></p>
   <input type="text" id="searchInput" placeholder="🔍 Search this list...">
   <p id="listTotal" class="list-total" style="display:none;"></p>
   <div class="list-actions">
@@ -1936,6 +1942,86 @@ function parseVoiceText(text) {
   return { name: t, qty: 1 };
 }
 
+let voiceStatusTimeoutId = null;
+function showVoiceStatus(text) {
+  const el = document.getElementById("voiceStatus");
+  el.textContent = text;
+  el.style.display = "block";
+  if (voiceStatusTimeoutId) clearTimeout(voiceStatusTimeoutId);
+  voiceStatusTimeoutId = setTimeout(() => { el.style.display = "none"; }, 4000);
+}
+
+function findItemByName(items, name, opts) {
+  opts = opts || {};
+  const target = name.trim().toLowerCase();
+  if (!target) return -1;
+  let idx = items.findIndex(it =>
+    (opts.checked === undefined || !!it.checked === opts.checked) &&
+    it.name.trim().toLowerCase() === target
+  );
+  if (idx !== -1) return idx;
+  return items.findIndex(it =>
+    (opts.checked === undefined || !!it.checked === opts.checked) &&
+    it.name.toLowerCase().includes(target)
+  );
+}
+
+function runVoiceCommand(rawTranscript) {
+  const transcript = rawTranscript.trim();
+  if (!data.activeStore) return;
+  const storeObj = data.stores[data.activeStore];
+  const list = getActiveList(data.activeStore);
+  const items = list.items;
+  let m;
+
+  if ((m = transcript.match(/^add\s+(.+)$/i))) {
+    const { name, qty } = parseVoiceText(m[1]);
+    if (!name) return;
+    const category = document.getElementById("itemCategory").value || "Other";
+    items.push({ name, qty, category, checked: false });
+    saveData();
+    render();
+    showVoiceStatus("Added " + (qty > 1 ? qty + "× " : "") + name);
+    return;
+  }
+
+  if ((m = transcript.match(/^uncheck\s+(.+)$/i))) {
+    const idx = findItemByName(items, m[1], { checked: true });
+    if (idx === -1) { showVoiceStatus("Couldn't find \"" + m[1] + "\" checked off"); return; }
+    items[idx].checked = false;
+    saveData();
+    render();
+    showVoiceStatus("Unchecked " + items[idx].name);
+    return;
+  }
+
+  if ((m = transcript.match(/^(?:check off|check|mark)\s+(.+?)(?:\s+as\s+done|\s+off)?$/i))) {
+    const idx = findItemByName(items, m[1], { checked: false });
+    if (idx === -1) { showVoiceStatus("Couldn't find \"" + m[1] + "\" on the list"); return; }
+    items[idx].checked = true;
+    saveData();
+    render();
+    showVoiceStatus("Checked off " + items[idx].name);
+    return;
+  }
+
+  if ((m = transcript.match(/^(?:remove|delete)\s+(.+)$/i))) {
+    const idx = findItemByName(items, m[1]);
+    if (idx === -1) { showVoiceStatus("Couldn't find \"" + m[1] + "\" to remove"); return; }
+    const [removed] = items.splice(idx, 1);
+    const bucket = archiveItemToHistory(list, removed);
+    saveData();
+    render();
+    showUndoToast(removed, idx, data.activeStore, storeObj.activeList, bucket);
+    showVoiceStatus("Removed " + removed.name);
+    return;
+  }
+
+  const { name, qty } = parseVoiceText(transcript);
+  document.getElementById("itemName").value = name;
+  document.getElementById("itemQty").value = qty;
+}
+
 const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
 
 document.getElementById("voiceBtn").addEventListener("click", () => {
@@ -1956,9 +2042,7 @@ document.getElementById("voiceBtn").addEventListener("click", () => {
 
   recognition.onresult = (event) => {
     const transcript = event.results[0][0].transcript;
-    const { name, qty } = parseVoiceText(transcript);
-    document.getElementById("itemName").value = name;
-    document.getElementById("itemQty").value = qty;
+    runVoiceCommand(transcript);
   };
 
   recognition.onerror = (event) => {
