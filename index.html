@@ -79,6 +79,7 @@
   }
   .add-item {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.5rem;
     margin-bottom: 1rem;
   }
@@ -689,9 +690,13 @@
   <div id="favoritesRow" class="favorites-row" style="display:none;"></div>
   <div class="add-item">
     <input type="text" id="itemName" placeholder="What do you need to buy?">
-    <input type="number" id="itemQty" min="1" value="1">
+    <input type="number" id="itemQty" min="0.25" step="0.25" value="1">
+    <select id="itemUnit">
+      <option value="each">each</option>
+      <option value="lbs">lbs</option>
+    </select>
     <select id="itemCategory"></select>
-    <button id="voiceBtn" class="secondary" title='Voice commands: "add milk", "check off eggs", "uncheck eggs", "remove bananas"'>🎤</button>
+    <button id="voiceBtn" class="secondary" title='Voice commands: "add milk", "add 2 lbs chicken", "check off eggs", "uncheck eggs", "remove bananas"'>🎤</button>
     <button id="addItemBtn">Add</button>
   </div>
   <p id="voiceStatus" class="voice-status" style="display:none;"></p>
@@ -945,11 +950,20 @@ function normalizeData(d) {
   });
   Object.values(d.stores).forEach(store => {
     if (!store.favorites) store.favorites = [];
+    store.favorites.forEach(fav => {
+      if (!fav.unit) fav.unit = "each";
+    });
     Object.values(store.lists).forEach(list => {
       if (!list.items) list.items = [];
       if (!list.history) list.history = [];
       list.items.forEach(item => {
         if (!item.category) item.category = "Other";
+        if (!item.unit) item.unit = "each";
+      });
+      list.history.forEach(bucket => {
+        (bucket.items || []).forEach(item => {
+          if (!item.unit) item.unit = "each";
+        });
       });
     });
   });
@@ -1003,18 +1017,33 @@ function hideUndoToast() {
   pendingUndo = null;
 }
 
+function trimQty(q) {
+  const r = Math.round((q || 0) * 100) / 100;
+  return Number.isInteger(r) ? String(r) : String(r);
+}
+
+function qtyText(item, countPrefix) {
+  const q = trimQty(item.qty);
+  return item.unit === "lbs" ? q + " lbs" : countPrefix + q;
+}
+
 function parsePastedList(text) {
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const items = [];
   for (const line of lines) {
     if (/^(shopping list|list)$/i.test(line)) continue;
     if (/^[\w\s]+ shopping list$/i.test(line)) continue;
-    const match = line.match(/^(.*?)\s*\(x(\d+)\)\s*$/i);
+    let match = line.match(/^(.*?)\s*\(x(\d+(?:\.\d+)?)\)\s*$/i);
     if (match) {
-      items.push({ name: match[1].trim(), qty: parseInt(match[2], 10) || 1 });
-    } else {
-      items.push({ name: line, qty: 1 });
+      items.push({ name: match[1].trim(), qty: parseFloat(match[2]) || 1, unit: "each" });
+      continue;
     }
+    match = line.match(/^(.*?)\s*\(([\d.]+)\s*lbs\)\s*$/i);
+    if (match) {
+      items.push({ name: match[1].trim(), qty: parseFloat(match[2]) || 1, unit: "lbs" });
+      continue;
+    }
+    items.push({ name: line, qty: 1, unit: "each" });
   }
   return items.filter(i => i.name);
 }
@@ -1176,7 +1205,7 @@ function renderReceiptReview(store, container) {
   addBtn.addEventListener("click", () => {
     const toAdd = (receiptCandidates || []).filter(c => c.checked && c.name.trim());
     toAdd.forEach(c => {
-      store.items.push({ name: c.name.trim(), qty: c.qty || 1, category: "Other", checked: false });
+      store.items.push({ name: c.name.trim(), qty: c.qty || 1, unit: "each", category: "Other", checked: false });
     });
     receiptReviewActive = false;
     receiptCandidates = null;
@@ -1346,7 +1375,7 @@ function renderFavoritesRow(storeObj) {
 
     chip.addEventListener("click", () => {
       const list = getActiveList(data.activeStore);
-      list.items.push({ name: fav.name, qty: fav.qty, category: fav.category || "Other", checked: false });
+      list.items.push({ name: fav.name, qty: fav.qty, unit: fav.unit || "each", category: fav.category || "Other", checked: false });
       saveData();
       render();
     });
@@ -1512,14 +1541,14 @@ function render() {
 
         const qtySpan = document.createElement("span");
         qtySpan.className = "qty";
-        qtySpan.textContent = "x" + item.qty;
+        qtySpan.textContent = qtyText(item, "x");
 
         const addBackBtn = document.createElement("button");
         addBackBtn.className = "add-back-btn";
         addBackBtn.textContent = "+";
         addBackBtn.title = "Add back to current list";
         addBackBtn.addEventListener("click", () => {
-          store.items.push({ name: item.name, qty: item.qty, category: item.category, checked: false });
+          store.items.push({ name: item.name, qty: item.qty, unit: item.unit || "each", category: item.category, checked: false });
           data.historyView[settingsKey(data.activeStore, storeObj.activeList)] = false;
           saveData();
           render();
@@ -1586,9 +1615,19 @@ function render() {
 
       const qtyInput = document.createElement("input");
       qtyInput.type = "number";
-      qtyInput.min = "1";
+      qtyInput.min = "0.25";
+      qtyInput.step = "0.25";
       qtyInput.placeholder = "Quantity";
       qtyInput.value = item.qty;
+
+      const unitEditSelect = document.createElement("select");
+      ["each", "lbs"].forEach(unit => {
+        const opt = document.createElement("option");
+        opt.value = unit;
+        opt.textContent = unit;
+        if (unit === (item.unit || "each")) opt.selected = true;
+        unitEditSelect.appendChild(opt);
+      });
 
       const categoryEditSelect = document.createElement("select");
       CATEGORIES.forEach(category => {
@@ -1617,7 +1656,8 @@ function render() {
         const newName = nameInput.value.trim();
         if (!newName) return;
         item.name = newName;
-        item.qty = parseInt(qtyInput.value, 10) || 1;
+        item.qty = parseFloat(qtyInput.value) || 1;
+        item.unit = unitEditSelect.value || "each";
         item.category = categoryEditSelect.value || "Other";
         item.note = noteInput.value.trim();
         const parsedPrice = parseFloat(priceInput.value);
@@ -1654,14 +1694,16 @@ function render() {
       favBtn.addEventListener("click", () => {
         const favName = nameInput.value.trim();
         if (!favName) return;
-        const favQty = parseInt(qtyInput.value, 10) || 1;
+        const favQty = parseFloat(qtyInput.value) || 1;
+        const favUnit = unitEditSelect.value || "each";
         const favCategory = categoryEditSelect.value || "Other";
         const existing = storeObj.favorites.find(f => f.name.toLowerCase() === favName.toLowerCase());
         if (existing) {
           existing.qty = favQty;
+          existing.unit = favUnit;
           existing.category = favCategory;
         } else {
-          storeObj.favorites.push({ name: favName, qty: favQty, category: favCategory });
+          storeObj.favorites.push({ name: favName, qty: favQty, unit: favUnit, category: favCategory });
         }
         saveData();
         const original = favBtn.textContent;
@@ -1677,6 +1719,7 @@ function render() {
 
       li.appendChild(nameInput);
       li.appendChild(qtyInput);
+      li.appendChild(unitEditSelect);
       li.appendChild(categoryEditSelect);
       li.appendChild(noteInput);
       li.appendChild(priceInput);
@@ -1715,9 +1758,10 @@ function render() {
     decBtn.className = "qty-btn";
     decBtn.textContent = "−";
     decBtn.title = "Decrease quantity";
+    const qtyStep = item.unit === "lbs" ? 0.25 : 1;
     decBtn.addEventListener("click", () => {
-      if (item.qty > 1) {
-        item.qty -= 1;
+      if (item.qty - qtyStep >= qtyStep) {
+        item.qty = Math.round((item.qty - qtyStep) * 100) / 100;
         saveData();
         render();
       }
@@ -1725,7 +1769,7 @@ function render() {
 
     const qtyNum = document.createElement("span");
     qtyNum.className = "qty-num";
-    qtyNum.textContent = "×" + item.qty;
+    qtyNum.textContent = qtyText(item, "×");
 
     const incBtn = document.createElement("button");
     incBtn.type = "button";
@@ -1733,7 +1777,7 @@ function render() {
     incBtn.textContent = "+";
     incBtn.title = "Increase quantity";
     incBtn.addEventListener("click", () => {
-      item.qty += 1;
+      item.qty = Math.round((item.qty + qtyStep) * 100) / 100;
       saveData();
       render();
     });
@@ -1913,13 +1957,16 @@ document.getElementById("addItemBtn").addEventListener("click", () => {
   if (!data.activeStore) return;
   const nameInput = document.getElementById("itemName");
   const qtyInput = document.getElementById("itemQty");
+  const unitSelect = document.getElementById("itemUnit");
   const name = nameInput.value.trim();
-  const qty = parseInt(qtyInput.value, 10) || 1;
+  const qty = parseFloat(qtyInput.value) || 1;
+  const unit = unitSelect.value || "each";
   const category = categorySelect.value || "Other";
   if (!name) return;
-  getActiveList(data.activeStore).items.push({ name, qty, category, checked: false });
+  getActiveList(data.activeStore).items.push({ name, qty, unit, category, checked: false });
   nameInput.value = "";
   qtyInput.value = "1";
+  unitSelect.value = "each";
   nameInput.focus();
   saveData();
   render();
@@ -1933,13 +1980,14 @@ const WORD_NUMBERS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven
 
 function parseVoiceText(text) {
   const t = text.trim();
-  const match = t.match(/^(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(.+)$/i);
+  const match = t.match(/^(\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:(lbs?|pounds?)\s+(?:of\s+)?)?(.+)$/i);
   if (match) {
     const numWord = match[1].toLowerCase();
-    const qty = /^\d+$/.test(numWord) ? parseInt(numWord, 10) : WORD_NUMBERS[numWord];
-    return { name: match[2].trim(), qty: qty || 1 };
+    const qty = /^[\d.]+$/.test(numWord) ? parseFloat(numWord) : WORD_NUMBERS[numWord];
+    const unit = match[2] ? "lbs" : "each";
+    return { name: match[3].trim(), qty: qty || 1, unit };
   }
-  return { name: t, qty: 1 };
+  return { name: t, qty: 1, unit: "each" };
 }
 
 let voiceStatusTimeoutId = null;
@@ -1975,13 +2023,14 @@ function runVoiceCommand(rawTranscript) {
   let m;
 
   if ((m = transcript.match(/^add\s+(.+)$/i))) {
-    const { name, qty } = parseVoiceText(m[1]);
+    const { name, qty, unit } = parseVoiceText(m[1]);
     if (!name) return;
     const category = document.getElementById("itemCategory").value || "Other";
-    items.push({ name, qty, category, checked: false });
+    items.push({ name, qty, unit, category, checked: false });
     saveData();
     render();
-    showVoiceStatus("Added " + (qty > 1 ? qty + "× " : "") + name);
+    const qtyPhrase = unit === "lbs" ? (trimQty(qty) + " lbs ") : (qty > 1 ? trimQty(qty) + "× " : "");
+    showVoiceStatus("Added " + qtyPhrase + name);
     return;
   }
 
@@ -2017,9 +2066,10 @@ function runVoiceCommand(rawTranscript) {
     return;
   }
 
-  const { name, qty } = parseVoiceText(transcript);
+  const { name, qty, unit } = parseVoiceText(transcript);
   document.getElementById("itemName").value = name;
   document.getElementById("itemQty").value = qty;
+  document.getElementById("itemUnit").value = unit;
 }
 
 const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -2084,7 +2134,7 @@ document.getElementById("copyBtn").addEventListener("click", async () => {
   }
 
   const lines = [data.activeStore + " Shopping List", ""];
-  lines.push(...items.map(item => "- " + item.name + " (x" + item.qty + ")"));
+  lines.push(...items.map(item => "- " + item.name + " (" + qtyText(item, "x") + ")"));
   const text = lines.join("\n");
 
   const copyBtn = document.getElementById("copyBtn");
@@ -2109,7 +2159,7 @@ document.getElementById("copyCheckedBtn").addEventListener("click", async () => 
   }
 
   const lines = ["Checked Off — " + data.activeStore, ""];
-  lines.push(...items.map(item => "- " + item.name + " (x" + item.qty + ")"));
+  lines.push(...items.map(item => "- " + item.name + " (" + qtyText(item, "x") + ")"));
   const text = lines.join("\n");
 
   const copyCheckedBtn = document.getElementById("copyCheckedBtn");
@@ -2239,7 +2289,7 @@ document.getElementById("importAddBtn").addEventListener("click", () => {
   }
   const store = getActiveList(data.activeStore);
   parsed.forEach(p => {
-    store.items.push({ name: p.name, qty: p.qty, category: "Other", checked: false });
+    store.items.push({ name: p.name, qty: p.qty, unit: p.unit || "each", category: "Other", checked: false });
   });
   importActive = false;
   saveData();
@@ -2334,6 +2384,7 @@ document.getElementById("shareLinkBtn").addEventListener("click", () => {
     items: items.map(item => ({
       name: item.name,
       qty: item.qty,
+      unit: item.unit || "each",
       category: item.category || "Other",
     })),
   };
@@ -2400,7 +2451,7 @@ function renderSharedView(snapshot) {
       nameSpan.textContent = item.name;
       const qtySpan = document.createElement("span");
       qtySpan.className = "qty";
-      qtySpan.textContent = "x" + item.qty;
+      qtySpan.textContent = qtyText(item, "x");
       li.appendChild(nameSpan);
       li.appendChild(qtySpan);
       itemsEl.appendChild(li);
