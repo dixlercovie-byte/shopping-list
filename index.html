@@ -522,6 +522,17 @@
     gap: 0.5rem;
     margin-bottom: 1rem;
   }
+  .qr-code-box {
+    text-align: center;
+    margin-bottom: 1rem;
+  }
+  .qr-code-box img {
+    max-width: 220px;
+    width: 100%;
+    border-radius: 6px;
+    background: #fff;
+    padding: 0.5rem;
+  }
   #dollarTreeSearchInput {
     flex: 1;
     padding: 0.5rem;
@@ -554,7 +565,7 @@
     display: none;
   }
   @media print {
-    .add-store, #storeTabs, .add-item, .remove-btn, .edit-btn, .add-back-btn, .list-actions, h1, #noStoreMsg, #receiptReview, #importView, #searchInput, .sync-row, #syncView, #cloudSyncView, .list-side, #artifactLink, #aldiAdsLink, #dollarTreeLink, #dollarTreeSearchRow {
+    .add-store, #storeTabs, .add-item, .remove-btn, .edit-btn, .add-back-btn, .list-actions, h1, #noStoreMsg, #receiptReview, #importView, #searchInput, .sync-row, #syncView, #cloudSyncView, #qrCodeView, .list-side, #artifactLink, #aldiAdsLink, #dollarTreeLink, #dollarTreeSearchRow {
       display: none !important;
     }
     .print-only {
@@ -642,6 +653,16 @@
   <button id="exportDataBtn" class="secondary">📤 Export all data</button>
   <button id="importDataBtn" class="secondary">📥 Import all data</button>
   <button id="cloudSyncBtn" class="secondary">🔄 Live sync</button>
+  <button id="qrCodeBtn" class="secondary">📱 QR code</button>
+</div>
+<div id="qrCodeView" style="display:none;">
+  <div class="qr-code-box">
+    <img id="qrCodeImg" alt="QR code linking to this app">
+  </div>
+  <p class="empty" style="text-align:center;">Scan with a phone camera to open this app</p>
+  <div class="receipt-actions">
+    <button id="qrCodeCloseBtn" class="secondary">Close</button>
+  </div>
 </div>
 <div id="syncView" style="display:none;">
   <p id="syncInstructions" class="empty"></p>
@@ -2384,6 +2405,17 @@ function searchDollarTree() {
 document.getElementById("dollarTreeSearchBtn").addEventListener("click", searchDollarTree);
 document.getElementById("dollarTreeSearchInput").addEventListener("keydown", (e) => {
   if (e.key === "Enter") searchDollarTree();
+});
+
+const APP_URL = "https://dixlercovie-byte.github.io/shopping-list/";
+
+document.getElementById("qrCodeBtn").addEventListener("click", () => {
+  document.getElementById("qrCodeImg").src =
+    "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" + encodeURIComponent(APP_URL);
+  document.getElementById("qrCodeView").style.display = "block";
+});
+document.getElementById("qrCodeCloseBtn").addEventListener("click", () => {
+  document.getElementById("qrCodeView").style.display = "none";
 });
 
 render();
