@@ -517,6 +517,19 @@
     gap: 0.5rem;
     margin-bottom: 1rem;
   }
+  .dt-search-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  #dollarTreeSearchInput {
+    flex: 1;
+    padding: 0.5rem;
+    border: 1px solid #8888;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+  }
   #syncTextarea {
     width: 100%;
     box-sizing: border-box;
@@ -541,7 +554,7 @@
     display: none;
   }
   @media print {
-    .add-store, #storeTabs, .add-item, .remove-btn, .edit-btn, .add-back-btn, .list-actions, h1, #noStoreMsg, #receiptReview, #importView, #searchInput, .sync-row, #syncView, #cloudSyncView, .list-side, #artifactLink, #aldiAdsLink, #dollarTreeLink {
+    .add-store, #storeTabs, .add-item, .remove-btn, .edit-btn, .add-back-btn, .list-actions, h1, #noStoreMsg, #receiptReview, #importView, #searchInput, .sync-row, #syncView, #cloudSyncView, .list-side, #artifactLink, #aldiAdsLink, #dollarTreeLink, #dollarTreeSearchRow {
       display: none !important;
     }
     .print-only {
@@ -613,6 +626,10 @@
 <p id="artifactLink"><a href="https://dixlercovie-byte.github.io/grocery-specials/" target="_blank" rel="noopener noreferrer">🔗 Seven Mile and Market Maven Sales</a></p>
 <p id="aldiAdsLink"><a href="https://info.aldi.us/weekly-specials/weekly-ads" target="_blank" rel="noopener noreferrer">🔗 Aldi Weekly Ads</a></p>
 <p id="dollarTreeLink"><a href="https://www.dollartree.com/" target="_blank" rel="noopener noreferrer">🔗 Dollar Tree</a></p>
+<div id="dollarTreeSearchRow" class="dt-search-row">
+  <input type="text" id="dollarTreeSearchInput" placeholder="Search Dollar Tree for an item...">
+  <button id="dollarTreeSearchBtn" class="secondary">🔍 Search Dollar Tree</button>
+</div>
 
 <div class="add-store">
   <input type="text" id="newStoreName" placeholder="New store name (e.g. Costco)">
@@ -2356,6 +2373,18 @@ if (shareIdFromUrl) {
       document.getElementById("sharedViewMeta").textContent = "Couldn't load this shared list: " + err.message;
     });
 }
+
+function searchDollarTree() {
+  const input = document.getElementById("dollarTreeSearchInput");
+  const term = input.value.trim();
+  if (!term) return;
+  window.open("https://www.dollartree.com/searchresults?Ntt=" + encodeURIComponent(term), "_blank", "noopener,noreferrer");
+}
+
+document.getElementById("dollarTreeSearchBtn").addEventListener("click", searchDollarTree);
+document.getElementById("dollarTreeSearchInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") searchDollarTree();
+});
 
 render();
 
