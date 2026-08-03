@@ -2503,6 +2503,21 @@ document.getElementById("qrCodeCloseBtn").addEventListener("click", () => {
 
 render();
 
+const shortcutAction = new URLSearchParams(location.search).get("action");
+if (shortcutAction && data.activeStore) {
+  if (shortcutAction === "add") {
+    const nameInput = document.getElementById("itemName");
+    if (nameInput) {
+      nameInput.scrollIntoView({ block: "center" });
+      nameInput.focus();
+    }
+  } else if (shortcutAction === "newweek") {
+    const newWeekBtn = document.getElementById("newWeekBtn");
+    if (newWeekBtn) newWeekBtn.click();
+  }
+  history.replaceState({}, "", location.pathname);
+}
+
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("sw.js").catch((err) => {
