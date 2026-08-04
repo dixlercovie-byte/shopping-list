@@ -747,11 +747,10 @@
       <button id="newWeekBtn" class="secondary">🗓️ Start new week</button>
       <button id="scanReceiptBtn" class="secondary">📷 Scan receipt</button>
       <input type="file" id="receiptInput" accept="image/*" capture="environment" style="display:none;">
-      <button id="importListBtn" class="secondary">📥 Paste list</button>
+      <button id="copyPasteListBtn" class="secondary">📋 Copy/Paste list</button>
       <button id="manageCategoriesBtn" class="secondary">🏷️ Categories</button>
     </div>
     <div>
-      <button id="copyBtn" class="secondary">📋 Copy list</button>
       <button id="printBtn" class="secondary">🖨 Print this list</button>
       <button id="shareLinkBtn" class="secondary">🔗 Share view-only link</button>
     </div>
@@ -781,6 +780,9 @@
   </div>
   <div id="receiptReview" style="display:none;"></div>
   <div id="importView" style="display:none;">
+    <div class="receipt-actions">
+      <button id="copyListInViewBtn" class="secondary">📋 Copy list to clipboard</button>
+    </div>
     <textarea id="importTextarea" rows="12" placeholder="Paste a list here, one item per line. Quantities like &quot;Cookies (x2)&quot; are read automatically."></textarea>
     <div class="receipt-actions">
       <button id="importAddBtn">Add pasted items</button>
@@ -2388,7 +2390,7 @@ document.getElementById("printCheckedBtn").addEventListener("click", () => {
   setTimeout(cleanup, 3000);
 });
 
-document.getElementById("copyBtn").addEventListener("click", async () => {
+document.getElementById("copyListInViewBtn").addEventListener("click", async () => {
   if (!data.activeStore) return;
   const items = (getActiveList(data.activeStore).items || []).filter(item => !item.checked);
   if (items.length === 0) {
@@ -2400,7 +2402,7 @@ document.getElementById("copyBtn").addEventListener("click", async () => {
   lines.push(...items.map(item => "- " + item.name + " (" + qtyText(item, "x") + ")"));
   const text = lines.join("\n");
 
-  const copyBtn = document.getElementById("copyBtn");
+  const copyBtn = document.getElementById("copyListInViewBtn");
   const originalLabel = copyBtn.textContent;
   try {
     await navigator.clipboard.writeText(text);
@@ -2534,7 +2536,7 @@ document.getElementById("receiptInput").addEventListener("change", async (e) => 
   render();
 });
 
-document.getElementById("importListBtn").addEventListener("click", () => {
+document.getElementById("copyPasteListBtn").addEventListener("click", () => {
   if (!data.activeStore) return;
   document.getElementById("importTextarea").value = "";
   importActive = true;
