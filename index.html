@@ -561,6 +561,7 @@
   }
   .sync-row {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.5rem;
     margin-bottom: 1rem;
   }
@@ -685,6 +686,8 @@
 <div class="sync-row">
   <button id="cloudSyncBtn" class="secondary">🔄 Live sync</button>
   <button id="qrCodeBtn" class="secondary">📱 QR code</button>
+  <button id="copyPasteListBtn" class="secondary">📋 Copy/Paste list</button>
+  <button id="shareLinkBtn" class="secondary">🔗 Share view-only link</button>
 </div>
 <div id="qrCodeView" style="display:none;">
   <div class="qr-code-box">
@@ -747,12 +750,10 @@
       <button id="newWeekBtn" class="secondary">🗓️ Start new week</button>
       <button id="scanReceiptBtn" class="secondary">📷 Scan receipt</button>
       <input type="file" id="receiptInput" accept="image/*" capture="environment" style="display:none;">
-      <button id="copyPasteListBtn" class="secondary">📋 Copy/Paste list</button>
       <button id="manageCategoriesBtn" class="secondary">🏷️ Categories</button>
     </div>
     <div>
       <button id="printBtn" class="secondary">🖨 Print this list</button>
-      <button id="shareLinkBtn" class="secondary">🔗 Share view-only link</button>
     </div>
   </div>
   <div id="shareLinkView" style="display:none;">
