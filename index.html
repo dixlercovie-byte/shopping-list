@@ -242,6 +242,38 @@
     font-size: 1.1rem;
     padding: 0 0.3rem;
   }
+  .drag-handle {
+    flex: 0 0 auto;
+    cursor: grab;
+    touch-action: none;
+    opacity: 0.5;
+    padding: 0 0.2rem;
+    font-size: 1rem;
+    line-height: 1;
+    user-select: none;
+  }
+  li.dragging {
+    opacity: 0.35;
+  }
+  .drag-placeholder {
+    height: 2.2rem;
+    border: 2px dashed #4a7dfc;
+    border-radius: 6px;
+    background: #4a7dfc22;
+    list-style: none;
+    margin: 0.15rem 0;
+  }
+  .drag-ghost {
+    position: fixed;
+    z-index: 1000;
+    pointer-events: none;
+    background: Canvas;
+    color: CanvasText;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+    border-radius: 6px;
+    opacity: 0.95;
+    list-style: none;
+  }
   .empty {
     opacity: 0.6;
     font-style: italic;
@@ -602,7 +634,7 @@
     display: none;
   }
   @media print {
-    .add-store, #storeTabs, .add-item, .remove-btn, .edit-btn, .add-back-btn, .list-actions, h1, #noStoreMsg, #receiptReview, #importView, #searchInput, .sync-row, #cloudSyncView, #qrCodeView, #voiceStatus, #categoriesView, .list-side, #artifactLink, #aldiAdsLink, #dollarTreeLink, #dollarTreeSearchRow {
+    .add-store, #storeTabs, .add-item, .remove-btn, .edit-btn, .add-back-btn, .drag-handle, .list-actions, h1, #noStoreMsg, #receiptReview, #importView, #searchInput, .sync-row, #cloudSyncView, #qrCodeView, #voiceStatus, #categoriesView, .list-side, #artifactLink, #aldiAdsLink, #dollarTreeLink, #dollarTreeSearchRow {
       display: none !important;
     }
     .print-only {
@@ -1289,6 +1321,85 @@ function renderReceiptReview(store, container) {
   container.appendChild(actions);
 }
 
+let dragState = null;
+
+function startItemDrag(e, idx, li) {
+  e.preventDefault();
+  e.stopPropagation();
+  const listEl = document.getElementById("items");
+  const rect = li.getBoundingClientRect();
+
+  const ghost = li.cloneNode(true);
+  ghost.className = "drag-ghost";
+  ghost.style.width = rect.width + "px";
+  ghost.style.top = rect.top + "px";
+  ghost.style.left = rect.left + "px";
+  document.body.appendChild(ghost);
+
+  const placeholder = document.createElement("li");
+  placeholder.className = "drag-placeholder";
+  li.parentNode.insertBefore(placeholder, li.nextSibling);
+  li.classList.add("dragging");
+
+  dragState = {
+    draggedIdx: idx,
+    ghostEl: ghost,
+    placeholderEl: placeholder,
+    originalLi: li,
+    listEl,
+    offsetY: e.clientY - rect.top,
+  };
+
+  document.addEventListener("pointermove", onItemDragMove);
+  document.addEventListener("pointerup", onItemDragEnd, { once: true });
+}
+
+function onItemDragMove(e) {
+  if (!dragState) return;
+  const { ghostEl, listEl, placeholderEl, originalLi } = dragState;
+  ghostEl.style.top = (e.clientY - dragState.offsetY) + "px";
+
+  const siblings = Array.from(listEl.querySelectorAll("li[data-idx]")).filter(li => li !== originalLi);
+  let inserted = false;
+  for (const sib of siblings) {
+    const r = sib.getBoundingClientRect();
+    const mid = r.top + r.height / 2;
+    if (e.clientY < mid) {
+      listEl.insertBefore(placeholderEl, sib);
+      inserted = true;
+      break;
+    }
+  }
+  if (!inserted) listEl.appendChild(placeholderEl);
+}
+
+function onItemDragEnd() {
+  if (!dragState) return;
+  document.removeEventListener("pointermove", onItemDragMove);
+  const { draggedIdx, ghostEl, placeholderEl, originalLi } = dragState;
+
+  const list = getActiveList(data.activeStore);
+  const items = list.items;
+  const [draggedItem] = items.splice(draggedIdx, 1);
+
+  const nextSiblingLi = placeholderEl.nextElementSibling;
+  let insertAt = items.length;
+  if (nextSiblingLi && nextSiblingLi.dataset.idx !== undefined) {
+    let nextIdx = parseInt(nextSiblingLi.dataset.idx, 10);
+    if (nextIdx > draggedIdx) nextIdx -= 1;
+    insertAt = nextIdx;
+  }
+  items.splice(insertAt, 0, draggedItem);
+
+  ghostEl.remove();
+  placeholderEl.remove();
+  originalLi.classList.remove("dragging");
+  dragState = null;
+
+  saveData();
+  render();
+}
+
 function attachSwipeHandlers(li, checkbox, removeBtn) {
   const threshold = 70;
   const maxDrag = 120;
@@ -1790,6 +1901,17 @@ function render() {
     }
 
     if (item.checked) li.classList.add("checked");
+    li.dataset.idx = idx;
+
+    let dragHandle = null;
+    if (!item.checked && currentSortMode === "added") {
+      dragHandle = document.createElement("span");
+      dragHandle.className = "drag-handle";
+      dragHandle.title = "Drag to reorder";
+      dragHandle.textContent = "⋮⋮";
+      dragHandle.addEventListener("touchstart", (e) => e.stopPropagation(), { passive: true });
+      dragHandle.addEventListener("pointerdown", (e) => startItemDrag(e, idx, li));
+    }
 
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
@@ -1876,6 +1998,7 @@ function render() {
       showUndoToast(removed, idx, data.activeStore, storeObj.activeList, bucket);
     });
 
+    if (dragHandle) li.appendChild(dragHandle);
     li.appendChild(checkbox);
     li.appendChild(nameWrap);
     li.appendChild(qtySpan);
