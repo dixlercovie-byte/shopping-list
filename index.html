@@ -1965,7 +1965,10 @@ document.getElementById("addStoreBtn").addEventListener("click", () => {
   const name = input.value.trim();
   if (!name) return;
   if (!data.stores[name]) {
-    data.stores[name] = { lists: { "Main": { items: [], history: [] } }, activeList: "Main" };
+    data.stores = {
+      [name]: { lists: { "Main": { items: [], history: [] } }, activeList: "Main" },
+      ...data.stores,
+    };
   }
   data.activeStore = name;
   editingIdx = null;
