@@ -1439,7 +1439,7 @@ function renderFavoritesRow(storeObj) {
 
     chip.addEventListener("click", () => {
       const list = getActiveList(data.activeStore);
-      list.items.push({ name: fav.name, qty: fav.qty, unit: fav.unit || "each", category: fav.category || "Other", checked: false });
+      addItemWithDuplicateCheck(list, { name: fav.name, qty: fav.qty, unit: fav.unit || "each", category: fav.category || "Other", checked: false });
       saveData();
       render();
     });
@@ -2041,6 +2041,37 @@ function reassignCategory(oldName, newName) {
   });
 }
 
+// Warns before creating a duplicate line item. Only checks against
+// unchecked items -- re-adding something already checked off (need
+// more of it) is a legitimate use, not a mistake.
+function addItemWithDuplicateCheck(list, newItem) {
+  const existing = list.items.find(i =>
+    !i.checked && i.name.trim().toLowerCase() === newItem.name.trim().toLowerCase()
+  );
+  if (!existing) {
+    list.items.push(newItem);
+    return;
+  }
+  if (existing.unit === newItem.unit) {
+    const mergedQty = Math.round((existing.qty + newItem.qty) * 100) / 100;
+    const merge = confirm(
+      "\"" + existing.name + "\" is already on this list (" + qtyText(existing, "×") + "). " +
+      "Increase it to " + qtyText({ qty: mergedQty, unit: existing.unit }, "×") + " instead of adding a duplicate?"
+    );
+    if (merge) {
+      existing.qty = mergedQty;
+      return;
+    }
+  } else {
+    const addAnyway = confirm(
+      "\"" + existing.name + "\" is already on this list (" + qtyText(existing, "×") + "). " +
+      "Add \"" + qtyText(newItem, "×") + " " + newItem.name + "\" as a separate entry?"
+    );
+    if (!addAnyway) return;
+  }
+  list.items.push(newItem);
+}
+
 function renderCategoriesView() {
   const container = document.getElementById("categoriesView");
   container.innerHTML = "";
@@ -2195,7 +2226,7 @@ document.getElementById("addItemBtn").addEventListener("click", () => {
   const unit = unitSelect.value || "each";
   const category = categorySelect.value || "Other";
   if (!name) return;
-  getActiveList(data.activeStore).items.push({ name, qty, unit, category, checked: false });
+  addItemWithDuplicateCheck(getActiveList(data.activeStore), { name, qty, unit, category, checked: false });
   nameInput.value = "";
   qtyInput.value = "1";
   unitSelect.value = "each";
@@ -2258,7 +2289,7 @@ function runVoiceCommand(rawTranscript) {
     const { name, qty, unit } = parseVoiceText(m[1]);
     if (!name) return;
     const category = document.getElementById("itemCategory").value || "Other";
-    items.push({ name, qty, unit, category, checked: false });
+    addItemWithDuplicateCheck(list, { name, qty, unit, category, checked: false });
     saveData();
     render();
     const qtyPhrase = unit === "lbs" ? (trimQty(qty) + " lbs ") : (qty > 1 ? trimQty(qty) + "× " : "");
