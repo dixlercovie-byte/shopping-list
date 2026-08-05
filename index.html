@@ -555,6 +555,22 @@
     background: transparent;
     color: inherit;
   }
+  .activity-log {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  .activity-log li {
+    padding: 0.35rem 0;
+    border-bottom: 1px solid #8884;
+    font-size: 0.85rem;
+  }
+  .activity-log .activity-time {
+    opacity: 0.6;
+    font-size: 0.75rem;
+  }
   #importTextarea {
     width: 100%;
     box-sizing: border-box;
@@ -753,6 +769,10 @@
 </div>
 <div id="cloudSyncView" style="display:none;">
   <p id="cloudSyncStatus" class="empty"></p>
+  <div class="receipt-actions" style="margin-bottom: 0.8rem;">
+    <input type="text" id="deviceNameInput" placeholder="Your name (shown in activity log)">
+    <button id="saveDeviceNameBtn" class="secondary">Save</button>
+  </div>
   <div id="cloudSyncDisconnected">
     <button id="startSyncBtn">Start new sync (use this device's list)</button>
     <p style="margin: 1rem 0 0.3rem;">Or join a sync already started on another device:</p>
@@ -767,6 +787,8 @@
       <button id="copySyncCodeBtn" class="secondary">Copy code</button>
       <button id="stopSyncBtn" class="secondary">Stop syncing</button>
     </div>
+    <h3 style="margin: 1rem 0 0.3rem; font-size: 0.9rem;">Recent activity</h3>
+    <ul id="activityLogList" class="activity-log"></ul>
   </div>
   <div class="receipt-actions">
     <button id="cloudSyncCloseBtn" class="secondary">Close</button>
@@ -854,6 +876,31 @@
 <script>
 const STORAGE_KEY = "multiStoreShoppingLists";
 const SYNC_CODE_KEY = "multiStoreShoppingListsSyncCode";
+const DEVICE_NAME_KEY = "multiStoreShoppingListsDeviceName";
+
+function getDeviceName() {
+  return localStorage.getItem(DEVICE_NAME_KEY) || "Someone";
+}
+
+function logActivity(action, itemName, extra) {
+  if (!Array.isArray(data.activityLog)) data.activityLog = [];
+  data.activityLog.unshift(Object.assign(
+    { action, itemName, by: getDeviceName(), at: Date.now() },
+    extra || {}
+  ));
+  if (data.activityLog.length > 50) data.activityLog.length = 50;
+}
+
+function timeAgo(ts) {
+  const diffSec = Math.max(0, Math.round((Date.now() - ts) / 1000));
+  if (diffSec < 60) return "just now";
+  const diffMin = Math.round(diffSec / 60);
+  if (diffMin < 60) return diffMin + (diffMin === 1 ? " min ago" : " min ago");
+  const diffHr = Math.round(diffMin / 60);
+  if (diffHr < 24) return diffHr + (diffHr === 1 ? " hour ago" : " hours ago");
+  const diffDay = Math.round(diffHr / 24);
+  return diffDay + (diffDay === 1 ? " day ago" : " days ago");
+}
 
 const firebaseConfig = {
   apiKey: "AIzaSyCUfESGWMkMMSbWQq0ZsKnayFj79eRba2A",
@@ -903,6 +950,7 @@ function connectSync(code) {
         syncRev = remoteRev;
         editingIdx = null;
         render();
+        renderCloudSyncView();
       } catch (e) {
         console.warn("Ignored bad remote sync data:", e);
       }
@@ -1036,6 +1084,7 @@ function normalizeData(d) {
   }
   if (!d.sortMode) d.sortMode = {};
   if (!d.historyView) d.historyView = {};
+  if (!Array.isArray(d.activityLog)) d.activityLog = [];
   if (!Array.isArray(d.categories) || d.categories.length === 0) {
     d.categories = DEFAULT_CATEGORIES.slice();
   } else {
@@ -1344,6 +1393,9 @@ function renderReceiptReview(store, container) {
     toAdd.forEach(c => {
       store.items.push({ name: c.name.trim(), qty: c.qty || 1, unit: "each", category: "Other", checked: false });
     });
+    if (toAdd.length) {
+      logActivity("added", toAdd.length === 1 ? toAdd[0].name.trim() : toAdd.length + " items", { source: "receipt scan" });
+    }
     receiptReviewActive = false;
     receiptCandidates = null;
     saveData();
@@ -1442,6 +1494,7 @@ function renderBarcodeReview(store, container) {
     checkOffBtn.textContent = "✓ Check it off";
     checkOffBtn.addEventListener("click", () => {
       barcodeResult.matchedItem.checked = true;
+      logActivity("checked", barcodeResult.matchedItem.name, { source: "barcode" });
       barcodeReviewActive = false;
       barcodeResult = null;
       saveData();
@@ -1628,6 +1681,7 @@ function renderItemMatchReview(store, container) {
   confirmBtn.addEventListener("click", () => {
     (itemMatchCandidates || []).filter(c => c.checked).forEach(c => {
       c.item.checked = true;
+      logActivity("checked", c.item.name, { source: "photo" });
     });
     itemMatchActive = false;
     itemMatchCandidates = null;
@@ -2317,6 +2371,7 @@ function render() {
     checkbox.checked = !!item.checked;
     checkbox.addEventListener("change", () => {
       item.checked = checkbox.checked;
+      logActivity(item.checked ? "checked" : "unchecked", item.name);
       saveData();
       render();
     });
@@ -2392,6 +2447,7 @@ function render() {
     removeBtn.addEventListener("click", () => {
       const [removed] = items.splice(idx, 1);
       const bucket = archiveItemToHistory(store, removed);
+      logActivity("removed", removed.name);
       saveData();
       render();
       showUndoToast(removed, idx, data.activeStore, storeObj.activeList, bucket);
@@ -2588,6 +2644,7 @@ function addItemWithDuplicateCheck(list, newItem) {
   );
   if (!existing) {
     list.items.push(newItem);
+    logActivity("added", newItem.name);
     return;
   }
   if (existing.unit === newItem.unit) {
@@ -2598,6 +2655,7 @@ function addItemWithDuplicateCheck(list, newItem) {
     );
     if (merge) {
       existing.qty = mergedQty;
+      logActivity("updated qty", existing.name);
       return;
     }
   } else {
@@ -2608,6 +2666,7 @@ function addItemWithDuplicateCheck(list, newItem) {
     if (!addAnyway) return;
   }
   list.items.push(newItem);
+  logActivity("added", newItem.name);
 }
 
 function renderCategoriesView() {
@@ -2839,6 +2898,7 @@ function runVoiceCommand(rawTranscript) {
     const idx = findItemByName(items, m[1], { checked: true });
     if (idx === -1) { showVoiceStatus("Couldn't find \"" + m[1] + "\" checked off"); return; }
     items[idx].checked = false;
+    logActivity("unchecked", items[idx].name);
     saveData();
     render();
     showVoiceStatus("Unchecked " + items[idx].name);
@@ -2849,6 +2909,7 @@ function runVoiceCommand(rawTranscript) {
     const idx = findItemByName(items, m[1], { checked: false });
     if (idx === -1) { showVoiceStatus("Couldn't find \"" + m[1] + "\" on the list"); return; }
     items[idx].checked = true;
+    logActivity("checked", items[idx].name);
     saveData();
     render();
     showVoiceStatus("Checked off " + items[idx].name);
@@ -2860,6 +2921,7 @@ function runVoiceCommand(rawTranscript) {
     if (idx === -1) { showVoiceStatus("Couldn't find \"" + m[1] + "\" to remove"); return; }
     const [removed] = items.splice(idx, 1);
     const bucket = archiveItemToHistory(list, removed);
+    logActivity("removed", removed.name);
     saveData();
     render();
     showUndoToast(removed, idx, data.activeStore, storeObj.activeList, bucket);
@@ -3002,6 +3064,7 @@ document.getElementById("newWeekBtn").addEventListener("click", () => {
   )) return;
 
   store.items.forEach(item => { item.checked = false; });
+  logActivity("started new week", data.activeStore);
   editingIdx = null;
   saveData();
   render();
@@ -3159,6 +3222,7 @@ document.getElementById("importAddBtn").addEventListener("click", () => {
   parsed.forEach(p => {
     store.items.push({ name: p.name, qty: p.qty, unit: p.unit || "each", category: "Other", checked: false });
   });
+  logActivity("added", parsed.length === 1 ? parsed[0].name : parsed.length + " items", { source: "pasted list" });
   importActive = false;
   saveData();
   render();
@@ -3174,22 +3238,71 @@ document.getElementById("searchInput").addEventListener("input", (e) => {
   render();
 });
 
+function renderActivityLog() {
+  const listEl = document.getElementById("activityLogList");
+  if (!listEl) return;
+  listEl.innerHTML = "";
+  const entries = data.activityLog || [];
+  if (entries.length === 0) {
+    const li = document.createElement("li");
+    li.textContent = "No activity yet.";
+    listEl.appendChild(li);
+    return;
+  }
+  entries.slice(0, 20).forEach(entry => {
+    const li = document.createElement("li");
+    const verb = entry.action === "added" ? "added"
+      : entry.action === "checked" ? "checked off"
+      : entry.action === "unchecked" ? "unchecked"
+      : entry.action === "removed" ? "removed"
+      : entry.action === "updated qty" ? "updated the quantity of"
+      : entry.action === "started new week" ? "started a new week for"
+      : entry.action;
+    li.textContent = entry.by + " " + verb + " \"" + entry.itemName + "\"";
+    const timeSpan = document.createElement("span");
+    timeSpan.className = "activity-time";
+    timeSpan.textContent = " — " + timeAgo(entry.at);
+    li.appendChild(timeSpan);
+    listEl.appendChild(li);
+  });
+}
+
 function renderCloudSyncView() {
   const status = document.getElementById("cloudSyncStatus");
   const disconnectedEl = document.getElementById("cloudSyncDisconnected");
   const connectedEl = document.getElementById("cloudSyncConnected");
+  const nameInput = document.getElementById("deviceNameInput");
+  if (nameInput && document.activeElement !== nameInput) {
+    nameInput.value = localStorage.getItem(DEVICE_NAME_KEY) || "";
+  }
 
   if (syncCode) {
     status.textContent = "This device is syncing live.";
     disconnectedEl.style.display = "none";
     connectedEl.style.display = "block";
     document.getElementById("cloudSyncCode").textContent = syncCode;
+    renderActivityLog();
   } else {
     status.textContent = "Not syncing yet.";
     disconnectedEl.style.display = "block";
     connectedEl.style.display = "none";
   }
 }
+
+document.getElementById("saveDeviceNameBtn").addEventListener("click", () => {
+  const input = document.getElementById("deviceNameInput");
+  const name = input.value.trim();
+  if (name) {
+    localStorage.setItem(DEVICE_NAME_KEY, name);
+  } else {
+    localStorage.removeItem(DEVICE_NAME_KEY);
+  }
+  const original = document.getElementById("saveDeviceNameBtn").textContent;
+  document.getElementById("saveDeviceNameBtn").textContent = "Saved!";
+  setTimeout(() => {
+    document.getElementById("saveDeviceNameBtn").textContent = original;
+  }, 1200);
+});
 
 document.getElementById("cloudSyncBtn").addEventListener("click", () => {
   document.getElementById("cloudSyncView").style.display = "block";
