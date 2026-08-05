@@ -505,7 +505,8 @@
     color: inherit;
   }
   .receipt-row.unchecked input[type="text"],
-  .receipt-row.unchecked input[type="number"] {
+  .receipt-row.unchecked input[type="number"],
+  .receipt-row.unchecked span {
     opacity: 0.4;
   }
   .receipt-actions {
@@ -654,7 +655,7 @@
     display: none;
   }
   @media print {
-    .add-store, #storeTabs, .add-item, .remove-btn, .edit-btn, .add-back-btn, .drag-handle, .list-actions, h1, #noStoreMsg, #receiptReview, #importView, #searchInput, .sync-row, #cloudSyncView, #qrCodeView, #voiceStatus, #categoriesView, .list-side, #artifactLink, #aldiAdsLink, #dollarTreeLink, #dollarTreeSearchRow {
+    .add-store, #storeTabs, .add-item, .remove-btn, .edit-btn, .add-back-btn, .drag-handle, .list-actions, h1, #noStoreMsg, #receiptReview, #barcodeReview, #itemMatchReview, #importView, #searchInput, .sync-row, #cloudSyncView, #qrCodeView, #voiceStatus, #categoriesView, .list-side, #artifactLink, #aldiAdsLink, #dollarTreeLink, #dollarTreeSearchRow {
       display: none !important;
     }
     .print-only {
@@ -804,6 +805,10 @@
       <button id="printBtn" class="secondary">🖨 Print this list</button>
       <button id="scanReceiptBtn" class="secondary">📷 Scan receipt</button>
       <input type="file" id="receiptInput" accept="image/*" capture="environment" style="display:none;">
+      <button id="scanBarcodeBtn" class="secondary">📦 Scan barcode to add</button>
+      <input type="file" id="barcodeInput" accept="image/*" capture="environment" style="display:none;">
+      <button id="scanItemBtn" class="secondary">📸 Photo an item to cross off</button>
+      <input type="file" id="itemPhotoInput" accept="image/*" capture="environment" style="display:none;">
     </div>
   </div>
   <div id="shareLinkView" style="display:none;">
@@ -830,6 +835,8 @@
     </div>
   </div>
   <div id="receiptReview" style="display:none;"></div>
+  <div id="barcodeReview" style="display:none;"></div>
+  <div id="itemMatchReview" style="display:none;"></div>
   <div id="importView" style="display:none;">
     <div class="receipt-actions">
       <button id="copyListInViewBtn" class="secondary">📋 Copy list to clipboard</button>
@@ -1114,6 +1121,14 @@ let receiptReviewActive = false;
 let receiptLoading = false;
 let receiptCandidates = null;
 let receiptError = null;
+let barcodeReviewActive = false;
+let barcodeLoading = false;
+let barcodeError = null;
+let barcodeResult = null;
+let itemMatchActive = false;
+let itemMatchLoading = false;
+let itemMatchError = null;
+let itemMatchCandidates = null;
 let importActive = false;
 let searchQuery = "";
 let pendingUndo = null;
@@ -1345,6 +1360,258 @@ function renderReceiptReview(store, container) {
   });
 
   actions.appendChild(addBtn);
+  actions.appendChild(cancelBtn);
+  container.appendChild(actions);
+}
+
+async function lookupBarcodeProduct(code) {
+  const res = await fetch("https://world.openfoodfacts.org/api/v0/product/" + encodeURIComponent(code) + ".json");
+  if (!res.ok) throw new Error("Product lookup failed.");
+  const json = await res.json();
+  if (json.status === 1 && json.product) {
+    return { name: json.product.product_name || json.product.generic_name || "", found: true };
+  }
+  return { name: "", found: false };
+}
+
+async function decodeBarcodeFromFile(file) {
+  if (!("BarcodeDetector" in window)) {
+    throw new Error("Barcode scanning isn't supported in this browser. It works in Chrome/Edge (desktop and Android), but not in Safari (iPhone/Mac).");
+  }
+  const bitmap = await createImageBitmap(file);
+  const detector = new BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "qr_code"] });
+  const results = await detector.detect(bitmap);
+  if (!results.length) {
+    throw new Error("Couldn't find a barcode in that photo. Try again with the barcode centered, flat, and well-lit.");
+  }
+  return results[0].rawValue;
+}
+
+function renderBarcodeReview(store, container) {
+  container.innerHTML = "";
+
+  if (barcodeLoading) {
+    const p = document.createElement("p");
+    p.className = "receipt-status";
+    p.textContent = "Reading barcode...";
+    container.appendChild(p);
+    return;
+  }
+
+  if (barcodeError) {
+    const p = document.createElement("p");
+    p.className = "receipt-status";
+    p.textContent = barcodeError;
+    container.appendChild(p);
+
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "secondary";
+    closeBtn.textContent = "Close";
+    closeBtn.addEventListener("click", () => {
+      barcodeReviewActive = false;
+      barcodeError = null;
+      render();
+    });
+    container.appendChild(closeBtn);
+    return;
+  }
+
+  const heading = document.createElement("h2");
+  heading.textContent = "Review scanned product";
+  container.appendChild(heading);
+
+  if (!barcodeResult) return;
+
+  const codeNote = document.createElement("p");
+  codeNote.className = "receipt-status";
+  codeNote.textContent = barcodeResult.found
+    ? "Barcode " + barcodeResult.code + " — found in the product database."
+    : "Barcode " + barcodeResult.code + " — not found in the product database. Enter the name yourself.";
+  container.appendChild(codeNote);
+
+  const row = document.createElement("div");
+  row.className = "receipt-row";
+
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.placeholder = "Item name";
+  nameInput.value = barcodeResult.name;
+  nameInput.addEventListener("input", () => { barcodeResult.name = nameInput.value; });
+
+  const qtyInput = document.createElement("input");
+  qtyInput.type = "number";
+  qtyInput.min = "0.25";
+  qtyInput.step = "0.25";
+  qtyInput.value = barcodeResult.qty;
+  qtyInput.addEventListener("input", () => { barcodeResult.qty = parseFloat(qtyInput.value) || 1; });
+
+  const unitSelect = document.createElement("select");
+  ["each", "lbs"].forEach(u => {
+    const opt = document.createElement("option");
+    opt.value = u;
+    opt.textContent = u;
+    if (u === barcodeResult.unit) opt.selected = true;
+    unitSelect.appendChild(opt);
+  });
+  unitSelect.addEventListener("change", () => { barcodeResult.unit = unitSelect.value; });
+
+  const categorySelectEl = document.createElement("select");
+  allCategories().forEach(c => {
+    const opt = document.createElement("option");
+    opt.value = c;
+    opt.textContent = c;
+    if (c === barcodeResult.category) opt.selected = true;
+    categorySelectEl.appendChild(opt);
+  });
+  categorySelectEl.addEventListener("change", () => { barcodeResult.category = categorySelectEl.value; });
+
+  row.appendChild(nameInput);
+  row.appendChild(qtyInput);
+  row.appendChild(unitSelect);
+  row.appendChild(categorySelectEl);
+  container.appendChild(row);
+
+  const actions = document.createElement("div");
+  actions.className = "receipt-actions";
+
+  const addBtn = document.createElement("button");
+  addBtn.textContent = "Add to list";
+  addBtn.addEventListener("click", () => {
+    const name = barcodeResult.name.trim();
+    if (!name) { alert("Enter an item name first."); return; }
+    addItemWithDuplicateCheck(store, { name, qty: barcodeResult.qty || 1, unit: barcodeResult.unit, category: barcodeResult.category, checked: false });
+    barcodeReviewActive = false;
+    barcodeResult = null;
+    saveData();
+    render();
+  });
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.className = "secondary";
+  cancelBtn.textContent = "Cancel";
+  cancelBtn.addEventListener("click", () => {
+    barcodeReviewActive = false;
+    barcodeResult = null;
+    render();
+  });
+
+  actions.appendChild(addBtn);
+  actions.appendChild(cancelBtn);
+  container.appendChild(actions);
+}
+
+function matchOcrTextToListItems(text, items) {
+  const normalize = (s) => s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  const normalizedText = normalize(text);
+  const textWords = new Set(normalizedText.split(" ").filter(w => w.length >= 3));
+
+  const candidates = [];
+  items.forEach((item, idx) => {
+    if (item.checked) return;
+    const itemNameNorm = normalize(item.name);
+    if (!itemNameNorm) return;
+
+    if (normalizedText.includes(itemNameNorm)) {
+      candidates.push({ item, idx, strong: true });
+      return;
+    }
+    const itemWords = itemNameNorm.split(" ").filter(w => w.length >= 3);
+    if (itemWords.length === 0) return;
+    const matchedCount = itemWords.filter(w => textWords.has(w)).length;
+    if (matchedCount === itemWords.length) {
+      candidates.push({ item, idx, strong: true });
+    } else if (matchedCount > 0 && matchedCount >= itemWords.length / 2) {
+      candidates.push({ item, idx, strong: false });
+    }
+  });
+  return candidates;
+}
+
+function renderItemMatchReview(store, container) {
+  container.innerHTML = "";
+
+  if (itemMatchLoading) {
+    const p = document.createElement("p");
+    p.className = "receipt-status";
+    p.textContent = "Reading photo... this can take a moment.";
+    container.appendChild(p);
+    return;
+  }
+
+  if (itemMatchError) {
+    const p = document.createElement("p");
+    p.className = "receipt-status";
+    p.textContent = itemMatchError;
+    container.appendChild(p);
+
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "secondary";
+    closeBtn.textContent = "Close";
+    closeBtn.addEventListener("click", () => {
+      itemMatchActive = false;
+      itemMatchError = null;
+      render();
+    });
+    container.appendChild(closeBtn);
+    return;
+  }
+
+  const heading = document.createElement("h2");
+  heading.textContent = "Cross off from photo";
+  container.appendChild(heading);
+
+  if (!itemMatchCandidates || itemMatchCandidates.length === 0) {
+    const p = document.createElement("p");
+    p.className = "receipt-status";
+    p.textContent = "Couldn't match this photo to anything on your list. Try getting closer to the item's name on the label.";
+    container.appendChild(p);
+  } else {
+    itemMatchCandidates.forEach(c => {
+      const row = document.createElement("div");
+      row.className = "receipt-row" + (c.checked ? "" : " unchecked");
+
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = c.checked;
+      checkbox.addEventListener("change", () => {
+        c.checked = checkbox.checked;
+        row.classList.toggle("unchecked", !c.checked);
+      });
+
+      const label = document.createElement("span");
+      label.textContent = c.item.name + " (" + qtyText(c.item, "×") + ")" + (c.strong ? "" : " — weak match");
+
+      row.appendChild(checkbox);
+      row.appendChild(label);
+      container.appendChild(row);
+    });
+  }
+
+  const actions = document.createElement("div");
+  actions.className = "receipt-actions";
+
+  const confirmBtn = document.createElement("button");
+  confirmBtn.textContent = "Check off selected";
+  confirmBtn.addEventListener("click", () => {
+    (itemMatchCandidates || []).filter(c => c.checked).forEach(c => {
+      c.item.checked = true;
+    });
+    itemMatchActive = false;
+    itemMatchCandidates = null;
+    saveData();
+    render();
+  });
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.className = "secondary";
+  cancelBtn.textContent = "Cancel";
+  cancelBtn.addEventListener("click", () => {
+    itemMatchActive = false;
+    itemMatchCandidates = null;
+    render();
+  });
+
+  actions.appendChild(confirmBtn);
   actions.appendChild(cancelBtn);
   container.appendChild(actions);
 }
@@ -1703,6 +1970,8 @@ function render() {
   const newWeekBtn = document.getElementById("newWeekBtn");
   const listActionsEl = document.querySelector(".list-actions");
   const receiptReviewEl = document.getElementById("receiptReview");
+  const barcodeReviewEl = document.getElementById("barcodeReview");
+  const itemMatchReviewEl = document.getElementById("itemMatchReview");
   const importViewEl = document.getElementById("importView");
 
   const searchInputEl = document.getElementById("searchInput");
@@ -1718,6 +1987,8 @@ function render() {
     listActionsEl.style.display = "none";
     listColumnsEl.style.display = "none";
     importViewEl.style.display = "none";
+    barcodeReviewEl.style.display = "none";
+    itemMatchReviewEl.style.display = "none";
     searchInputEl.style.display = "none";
     listTotalEl.style.display = "none";
     favoritesRowEl.style.display = "none";
@@ -1726,6 +1997,35 @@ function render() {
     return;
   }
   receiptReviewEl.style.display = "none";
+
+  if (barcodeReviewActive) {
+    addItemRow.style.display = "none";
+    listActionsEl.style.display = "none";
+    listColumnsEl.style.display = "none";
+    importViewEl.style.display = "none";
+    itemMatchReviewEl.style.display = "none";
+    searchInputEl.style.display = "none";
+    listTotalEl.style.display = "none";
+    favoritesRowEl.style.display = "none";
+    barcodeReviewEl.style.display = "block";
+    renderBarcodeReview(store, barcodeReviewEl);
+    return;
+  }
+  barcodeReviewEl.style.display = "none";
+
+  if (itemMatchActive) {
+    addItemRow.style.display = "none";
+    listActionsEl.style.display = "none";
+    listColumnsEl.style.display = "none";
+    importViewEl.style.display = "none";
+    searchInputEl.style.display = "none";
+    listTotalEl.style.display = "none";
+    favoritesRowEl.style.display = "none";
+    itemMatchReviewEl.style.display = "block";
+    renderItemMatchReview(store, itemMatchReviewEl);
+    return;
+  }
+  itemMatchReviewEl.style.display = "none";
 
   if (importActive) {
     addItemRow.style.display = "none";
@@ -2721,6 +3021,71 @@ document.getElementById("receiptInput").addEventListener("change", async (e) => 
     receiptError = "Couldn't read that receipt: " + err.message;
   }
   receiptLoading = false;
+  render();
+});
+
+document.getElementById("scanBarcodeBtn").addEventListener("click", () => {
+  document.getElementById("barcodeInput").click();
+});
+
+document.getElementById("barcodeInput").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file || !data.activeStore) return;
+
+  barcodeReviewActive = true;
+  barcodeLoading = true;
+  barcodeError = null;
+  barcodeResult = null;
+  render();
+
+  try {
+    const code = await decodeBarcodeFromFile(file);
+    let productName = "";
+    let found = false;
+    try {
+      const lookup = await lookupBarcodeProduct(code);
+      productName = lookup.name;
+      found = lookup.found;
+    } catch (lookupErr) {
+      // Lookup failing isn't fatal -- the user can still type the name themselves.
+    }
+    barcodeResult = { code, name: productName, found, qty: 1, unit: "each", category: "Other" };
+  } catch (err) {
+    barcodeError = err.message;
+  }
+  barcodeLoading = false;
+  render();
+});
+
+document.getElementById("scanItemBtn").addEventListener("click", () => {
+  document.getElementById("itemPhotoInput").click();
+});
+
+document.getElementById("itemPhotoInput").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file || !data.activeStore) return;
+
+  itemMatchActive = true;
+  itemMatchLoading = true;
+  itemMatchError = null;
+  itemMatchCandidates = null;
+  render();
+
+  try {
+    await loadTesseractScript();
+    const processed = await preprocessReceiptImage(file);
+    const worker = await Tesseract.createWorker("eng");
+    await worker.setParameters({ tessedit_pageseg_mode: "6" });
+    const { data: ocrData } = await worker.recognize(processed);
+    await worker.terminate();
+    const list = getActiveList(data.activeStore);
+    itemMatchCandidates = matchOcrTextToListItems(ocrData.text, list.items).map(c => ({ ...c, checked: c.strong }));
+  } catch (err) {
+    itemMatchError = "Couldn't read that photo: " + err.message;
+  }
+  itemMatchLoading = false;
   render();
 });
 
