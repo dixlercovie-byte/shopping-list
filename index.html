@@ -74,6 +74,9 @@
     cursor: pointer;
     margin-left: 0.4rem;
   }
+  .color-swatch.selected {
+    box-shadow: 0 0 0 2px #4a7dfc;
+  }
   .color-swatch-clear {
     flex: 0 0 auto;
     background: transparent;
@@ -759,8 +762,8 @@
   <button id="qrCodeBtn" class="secondary">📱 QR code</button>
   <button id="copyPasteListBtn" class="secondary">📋 Copy/Paste list</button>
   <button id="shareLinkBtn" class="secondary">🔗 Share view-only link</button>
-  <button type="button" id="bgColorSwatch" class="color-swatch" title="Background color"></button>
-  <input type="color" id="bgColorInput" style="display:none;">
+  <button type="button" id="bgColorWhiteBtn" class="color-swatch" title="White background" style="background:#fff;"></button>
+  <button type="button" id="bgColorBlackBtn" class="color-swatch" title="Black background" style="background:#000;"></button>
   <button type="button" id="bgColorClearBtn" class="color-swatch-clear" title="Reset background color" style="display:none;">↺</button>
 </div>
 <div id="qrCodeView" style="display:none;">
@@ -1212,19 +1215,20 @@ const BG_COLOR_KEY = "multiStoreShoppingListsBgColor";
 
 function applyBgColor() {
   const color = localStorage.getItem(BG_COLOR_KEY);
-  const swatch = document.getElementById("bgColorSwatch");
+  const whiteBtn = document.getElementById("bgColorWhiteBtn");
+  const blackBtn = document.getElementById("bgColorBlackBtn");
   const clearBtn = document.getElementById("bgColorClearBtn");
   if (color) {
     document.body.style.background = color;
     document.body.style.color = contrastTextColor(color);
-    if (swatch) swatch.style.background = color;
     if (clearBtn) clearBtn.style.display = "inline-block";
   } else {
     document.body.style.background = "";
     document.body.style.color = "";
-    if (swatch) swatch.style.background = "transparent";
     if (clearBtn) clearBtn.style.display = "none";
   }
+  if (whiteBtn) whiteBtn.classList.toggle("selected", color === "#ffffff");
+  if (blackBtn) blackBtn.classList.toggle("selected", color === "#000000");
 }
 
 function trimQty(q) {
@@ -3506,11 +3510,12 @@ document.getElementById("qrCodeCloseBtn").addEventListener("click", () => {
   document.getElementById("qrCodeView").style.display = "none";
 });
 
-document.getElementById("bgColorSwatch").addEventListener("click", () => {
-  document.getElementById("bgColorInput").click();
+document.getElementById("bgColorWhiteBtn").addEventListener("click", () => {
+  localStorage.setItem(BG_COLOR_KEY, "#ffffff");
+  applyBgColor();
 });
-document.getElementById("bgColorInput").addEventListener("input", (e) => {
-  localStorage.setItem(BG_COLOR_KEY, e.target.value);
+document.getElementById("bgColorBlackBtn").addEventListener("click", () => {
+  localStorage.setItem(BG_COLOR_KEY, "#000000");
   applyBgColor();
 });
 document.getElementById("bgColorClearBtn").addEventListener("click", () => {
