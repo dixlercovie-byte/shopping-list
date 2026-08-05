@@ -64,6 +64,26 @@
   .store-tab.active + .store-delete-btn {
     border-left-color: #4a7dfc;
   }
+  .color-swatch {
+    flex: 0 0 auto;
+    width: 0.9rem;
+    height: 0.9rem;
+    border-radius: 50%;
+    border: 1px solid #8888;
+    padding: 0;
+    cursor: pointer;
+    margin-left: 0.4rem;
+  }
+  .color-swatch-clear {
+    flex: 0 0 auto;
+    background: transparent;
+    border: none;
+    color: inherit;
+    opacity: 0.6;
+    cursor: pointer;
+    font-size: 0.7rem;
+    padding: 0 0.2rem;
+  }
   .add-store {
     display: flex;
     gap: 0.5rem;
@@ -1111,6 +1131,14 @@ function hideUndoToast() {
   pendingUndo = null;
 }
 
+function contrastTextColor(hex) {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!m) return "#000";
+  const [r, g, b] = [m[1], m[2], m[3]].map(h => parseInt(h, 16));
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.6 ? "#000" : "#fff";
+}
+
 function trimQty(q) {
   const r = Math.round((q || 0) * 100) / 100;
   return Number.isInteger(r) ? String(r) : String(r);
@@ -1566,9 +1594,15 @@ function render() {
     const wrap = document.createElement("div");
     wrap.className = "store-tab-wrap";
 
+    const storeColor = data.stores[name].color;
+
     const btn = document.createElement("button");
     btn.className = "store-tab" + (name === data.activeStore ? " active" : "");
     btn.textContent = name;
+    if (name === data.activeStore && storeColor) {
+      btn.style.background = storeColor;
+      btn.style.color = contrastTextColor(storeColor);
+    }
     btn.addEventListener("click", () => {
       data.activeStore = name;
       editingIdx = null;
@@ -1579,6 +1613,23 @@ function render() {
       saveData();
       render();
     });
+
+    const colorInput = document.createElement("input");
+    colorInput.type = "color";
+    colorInput.value = storeColor || "#4a7dfc";
+    colorInput.style.display = "none";
+    colorInput.addEventListener("input", () => {
+      data.stores[name].color = colorInput.value;
+      saveData();
+      render();
+    });
+
+    const swatch = document.createElement("button");
+    swatch.type = "button";
+    swatch.className = "color-swatch";
+    swatch.title = "Tab color";
+    swatch.style.background = storeColor || "transparent";
+    swatch.addEventListener("click", () => colorInput.click());
 
     const deleteBtn = document.createElement("button");
     deleteBtn.className = "store-delete-btn";
@@ -1596,6 +1647,21 @@ function render() {
     });
 
     wrap.appendChild(btn);
+    wrap.appendChild(swatch);
+    wrap.appendChild(colorInput);
+    if (storeColor) {
+      const clearBtn = document.createElement("button");
+      clearBtn.type = "button";
+      clearBtn.className = "color-swatch-clear";
+      clearBtn.title = "Remove tab color";
+      clearBtn.textContent = "↺";
+      clearBtn.addEventListener("click", () => {
+        delete data.stores[name].color;
+        saveData();
+        render();
+      });
+      wrap.appendChild(clearBtn);
+    }
     wrap.appendChild(deleteBtn);
     tabsEl.appendChild(wrap);
   });
