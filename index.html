@@ -674,7 +674,7 @@
     display: none;
   }
   @media print {
-    .add-store, #storeTabs, .add-item, .remove-btn, .edit-btn, .add-back-btn, .drag-handle, .list-actions, h1, #noStoreMsg, #receiptReview, #barcodeReview, #itemMatchReview, #importView, #searchInput, .sync-row, #cloudSyncView, #qrCodeView, #voiceStatus, #categoriesView, .list-side, #artifactLink, #aldiAdsLink, #dollarTreeLink, #dollarTreeSearchRow {
+    .add-store, #storeTabs, .add-item, .remove-btn, .edit-btn, .add-back-btn, .drag-handle, .list-actions, h1, #noStoreMsg, #receiptReview, #barcodeReview, #itemMatchReview, #importView, #searchInput, .sync-row, #cloudSyncView, #qrCodeView, #voiceStatus, #categoriesView, .list-side, #artifactLink, #aldiAdsLink, #aldiSearchRow, #dollarTreeLink, #dollarTreeSearchRow {
       display: none !important;
     }
     .print-only {
@@ -744,6 +744,10 @@
 <h1>Shopping Lists</h1>
 <p id="artifactLink"><a href="https://dixlercovie-byte.github.io/grocery-specials/" target="_blank" rel="noopener noreferrer">🔗 Seven Mile and Market Maven Sales</a></p>
 <p id="aldiAdsLink"><a href="https://info.aldi.us/weekly-specials/weekly-ads" target="_blank" rel="noopener noreferrer">🔗 Aldi Weekly Ads</a></p>
+<div id="aldiSearchRow" class="dt-search-row">
+  <input type="text" id="aldiSearchInput" placeholder="Search Aldi for an item...">
+  <button id="aldiSearchBtn" class="secondary">🔍 Search Aldi</button>
+</div>
 <p id="dollarTreeLink"><a href="https://www.dollartree.com/" target="_blank" rel="noopener noreferrer">🔗 Dollar Tree</a></p>
 <div id="dollarTreeSearchRow" class="dt-search-row">
   <input type="text" id="dollarTreeSearchInput" placeholder="Search Dollar Tree for an item...">
@@ -3497,6 +3501,18 @@ function searchDollarTree() {
 document.getElementById("dollarTreeSearchBtn").addEventListener("click", searchDollarTree);
 document.getElementById("dollarTreeSearchInput").addEventListener("keydown", (e) => {
   if (e.key === "Enter") searchDollarTree();
+});
+
+function searchAldi() {
+  const input = document.getElementById("aldiSearchInput");
+  const term = input.value.trim();
+  if (!term) return;
+  window.open("https://www.aldi.us/store/aldi/s?k=" + encodeURIComponent(term), "_blank", "noopener,noreferrer");
+}
+
+document.getElementById("aldiSearchBtn").addEventListener("click", searchAldi);
+document.getElementById("aldiSearchInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") searchAldi();
 });
 
 const APP_URL = "https://dixlercovie-byte.github.io/shopping-list/";
