@@ -637,10 +637,16 @@
     gap: 0.5rem;
     margin-bottom: 1rem;
   }
+  .store-search-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    margin-bottom: 1rem;
+  }
   .dt-search-row {
     display: flex;
     gap: 0.5rem;
-    margin-bottom: 1rem;
+    flex: 1 1 220px;
   }
   .qr-code-box {
     text-align: center;
@@ -674,7 +680,7 @@
     display: none;
   }
   @media print {
-    .add-store, #storeTabs, .add-item, .remove-btn, .edit-btn, .add-back-btn, .drag-handle, .list-actions, h1, #noStoreMsg, #receiptReview, #barcodeReview, #itemMatchReview, #importView, #searchInput, .sync-row, #cloudSyncView, #qrCodeView, #voiceStatus, #categoriesView, .list-side, #artifactLink, #aldiAdsLink, #aldiSearchRow, #dollarTreeLink, #dollarTreeSearchRow {
+    .add-store, #storeTabs, .add-item, .remove-btn, .edit-btn, .add-back-btn, .drag-handle, .list-actions, h1, #noStoreMsg, #receiptReview, #barcodeReview, #itemMatchReview, #importView, #searchInput, .sync-row, #cloudSyncView, #qrCodeView, #voiceStatus, #categoriesView, .list-side, #artifactLink, #aldiAdsLink, #dollarTreeLink, .store-search-group {
       display: none !important;
     }
     .print-only {
@@ -745,13 +751,15 @@
 <p id="artifactLink"><a href="https://dixlercovie-byte.github.io/grocery-specials/" target="_blank" rel="noopener noreferrer">🔗 Seven Mile and Market Maven Sales</a></p>
 <p id="aldiAdsLink"><a href="https://info.aldi.us/weekly-specials/weekly-ads" target="_blank" rel="noopener noreferrer">🔗 Aldi Weekly Ads</a></p>
 <p id="dollarTreeLink"><a href="https://www.dollartree.com/" target="_blank" rel="noopener noreferrer">🔗 Dollar Tree</a></p>
-<div id="aldiSearchRow" class="dt-search-row">
-  <input type="text" id="aldiSearchInput" placeholder="Search Aldi for an item...">
-  <button id="aldiSearchBtn" class="secondary">🔍 Search Aldi</button>
-</div>
-<div id="dollarTreeSearchRow" class="dt-search-row">
-  <input type="text" id="dollarTreeSearchInput" placeholder="Search Dollar Tree for an item...">
-  <button id="dollarTreeSearchBtn" class="secondary">🔍 Search Dollar Tree</button>
+<div class="store-search-group">
+  <div id="aldiSearchRow" class="dt-search-row">
+    <input type="text" id="aldiSearchInput" placeholder="Search Aldi for an item...">
+    <button id="aldiSearchBtn" class="secondary">🔍 Search Aldi</button>
+  </div>
+  <div id="dollarTreeSearchRow" class="dt-search-row">
+    <input type="text" id="dollarTreeSearchInput" placeholder="Search Dollar Tree for an item...">
+    <button id="dollarTreeSearchBtn" class="secondary">🔍 Search Dollar Tree</button>
+  </div>
 </div>
 
 <div class="add-store">
