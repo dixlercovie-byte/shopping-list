@@ -16,6 +16,7 @@
 <style>
   :root {
     color-scheme: light dark;
+    --print-scale: 1;
   }
   body {
     font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
@@ -687,14 +688,14 @@
       display: block;
     }
     body {
-      font-size: 0.6rem;
+      font-size: calc(0.6rem * var(--print-scale, 1));
       margin: 0.3rem auto;
       line-height: 1.1;
       color: #000 !important;
       background: #fff !important;
     }
     #printStoreName, #printCheckedHeading {
-      font-size: 0.9rem;
+      font-size: calc(0.9rem * var(--print-scale, 1));
       margin: 0 0 0.3rem;
     }
     ul#items li, ul#checkedItems li {
@@ -711,7 +712,10 @@
     }
     li.category-header {
       padding-top: 0.35rem !important;
-      font-size: 0.6rem;
+      font-size: calc(0.6rem * var(--print-scale, 1));
+    }
+    ul#items li input[type="checkbox"], ul#checkedItems li input[type="checkbox"] {
+      display: none !important;
     }
     body.printing-checked .list-main {
       display: none !important;
@@ -845,6 +849,12 @@
       <button id="historyToggleBtn" class="secondary">🕘 Past lists</button>
       <button id="newWeekBtn" class="secondary">🗓️ Start new week</button>
       <button id="printBtn" class="secondary">🖨 Print this list</button>
+      <select id="printFontSizeSelect" title="Print font size">
+        <option value="0.8">Print size: Small</option>
+        <option value="1" selected>Print size: Medium</option>
+        <option value="1.3">Print size: Large</option>
+        <option value="1.6">Print size: Extra large</option>
+      </select>
       <button id="scanReceiptBtn" class="secondary">📷 Scan receipt</button>
       <input type="file" id="receiptInput" accept="image/*" capture="environment" style="display:none;">
       <button id="scanBarcodeBtn" class="secondary">📦 Scan barcode to add</button>
@@ -3015,6 +3025,22 @@ document.getElementById("voiceBtn").addEventListener("click", () => {
 document.getElementById("printBtn").addEventListener("click", () => {
   window.print();
 });
+
+const PRINT_SCALE_KEY = "multiStoreShoppingListsPrintScale";
+
+function applyPrintScale() {
+  const saved = localStorage.getItem(PRINT_SCALE_KEY) || "1";
+  document.documentElement.style.setProperty("--print-scale", saved);
+  const select = document.getElementById("printFontSizeSelect");
+  if (select) select.value = saved;
+}
+
+document.getElementById("printFontSizeSelect").addEventListener("change", (e) => {
+  localStorage.setItem(PRINT_SCALE_KEY, e.target.value);
+  applyPrintScale();
+});
+
+applyPrintScale();
 
 document.getElementById("printCheckedBtn").addEventListener("click", () => {
   if (document.getElementById("checkedItems").children.length === 0) {
