@@ -1429,6 +1429,39 @@ function renderBarcodeReview(store, container) {
     : "Barcode " + barcodeResult.code + " — not found in the product database. Enter the name yourself.";
   container.appendChild(codeNote);
 
+  if (barcodeResult.matchedItem) {
+    const matchNote = document.createElement("p");
+    matchNote.className = "receipt-status";
+    matchNote.textContent = "This looks like \"" + barcodeResult.matchedItem.name + "\" already on your list.";
+    container.appendChild(matchNote);
+
+    const matchActions = document.createElement("div");
+    matchActions.className = "receipt-actions";
+
+    const checkOffBtn = document.createElement("button");
+    checkOffBtn.textContent = "✓ Check it off";
+    checkOffBtn.addEventListener("click", () => {
+      barcodeResult.matchedItem.checked = true;
+      barcodeReviewActive = false;
+      barcodeResult = null;
+      saveData();
+      render();
+    });
+
+    const addAnywayBtn = document.createElement("button");
+    addAnywayBtn.className = "secondary";
+    addAnywayBtn.textContent = "＋ Add as new item instead";
+    addAnywayBtn.addEventListener("click", () => {
+      barcodeResult.matchedItem = null;
+      render();
+    });
+
+    matchActions.appendChild(checkOffBtn);
+    matchActions.appendChild(addAnywayBtn);
+    container.appendChild(matchActions);
+    return;
+  }
+
   const row = document.createElement("div");
   row.className = "receipt-row";
 
@@ -2531,6 +2564,21 @@ function reassignCategory(oldName, newName) {
   });
 }
 
+// Barcode-resolved product names rarely match a list entry word-for-word
+// (e.g. "Nutella Hazelnut Spread 13oz" vs. just "Nutella"), so match in
+// both directions rather than requiring an exact or one-way substring hit.
+function findMatchingUncheckedItem(items, productName) {
+  const target = productName.trim().toLowerCase();
+  if (!target) return null;
+  const exact = items.find(it => !it.checked && it.name.trim().toLowerCase() === target);
+  if (exact) return exact;
+  return items.find(it => {
+    if (it.checked) return false;
+    const itemName = it.name.trim().toLowerCase();
+    return itemName && (itemName.includes(target) || target.includes(itemName));
+  }) || null;
+}
+
 // Warns before creating a duplicate line item. Only checks against
 // unchecked items -- re-adding something already checked off (need
 // more of it) is a legitimate use, not a mistake.
@@ -3050,7 +3098,9 @@ document.getElementById("barcodeInput").addEventListener("change", async (e) => 
     } catch (lookupErr) {
       // Lookup failing isn't fatal -- the user can still type the name themselves.
     }
-    barcodeResult = { code, name: productName, found, qty: 1, unit: "each", category: "Other" };
+    const list = getActiveList(data.activeStore);
+    const matchedItem = productName ? findMatchingUncheckedItem(list.items, productName) : null;
+    barcodeResult = { code, name: productName, found, qty: 1, unit: "each", category: "Other", matchedItem };
   } catch (err) {
     barcodeError = err.message;
   }
