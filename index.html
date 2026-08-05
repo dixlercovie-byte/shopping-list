@@ -681,6 +681,8 @@
       font-size: 0.6rem;
       margin: 0.3rem auto;
       line-height: 1.1;
+      color: #000 !important;
+      background: #fff !important;
     }
     #printStoreName, #printCheckedHeading {
       font-size: 0.9rem;
@@ -757,6 +759,9 @@
   <button id="qrCodeBtn" class="secondary">📱 QR code</button>
   <button id="copyPasteListBtn" class="secondary">📋 Copy/Paste list</button>
   <button id="shareLinkBtn" class="secondary">🔗 Share view-only link</button>
+  <button type="button" id="bgColorSwatch" class="color-swatch" title="Background color"></button>
+  <input type="color" id="bgColorInput" style="display:none;">
+  <button type="button" id="bgColorClearBtn" class="color-swatch-clear" title="Reset background color" style="display:none;">↺</button>
 </div>
 <div id="qrCodeView" style="display:none;">
   <div class="qr-code-box">
@@ -1201,6 +1206,25 @@ function contrastTextColor(hex) {
   const [r, g, b] = [m[1], m[2], m[3]].map(h => parseInt(h, 16));
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
   return luminance > 0.6 ? "#000" : "#fff";
+}
+
+const BG_COLOR_KEY = "multiStoreShoppingListsBgColor";
+
+function applyBgColor() {
+  const color = localStorage.getItem(BG_COLOR_KEY);
+  const swatch = document.getElementById("bgColorSwatch");
+  const clearBtn = document.getElementById("bgColorClearBtn");
+  if (color) {
+    document.body.style.background = color;
+    document.body.style.color = contrastTextColor(color);
+    if (swatch) swatch.style.background = color;
+    if (clearBtn) clearBtn.style.display = "inline-block";
+  } else {
+    document.body.style.background = "";
+    document.body.style.color = "";
+    if (swatch) swatch.style.background = "transparent";
+    if (clearBtn) clearBtn.style.display = "none";
+  }
 }
 
 function trimQty(q) {
@@ -3481,6 +3505,19 @@ document.getElementById("qrCodeBtn").addEventListener("click", () => {
 document.getElementById("qrCodeCloseBtn").addEventListener("click", () => {
   document.getElementById("qrCodeView").style.display = "none";
 });
+
+document.getElementById("bgColorSwatch").addEventListener("click", () => {
+  document.getElementById("bgColorInput").click();
+});
+document.getElementById("bgColorInput").addEventListener("input", (e) => {
+  localStorage.setItem(BG_COLOR_KEY, e.target.value);
+  applyBgColor();
+});
+document.getElementById("bgColorClearBtn").addEventListener("click", () => {
+  localStorage.removeItem(BG_COLOR_KEY);
+  applyBgColor();
+});
+applyBgColor();
 
 render();
 
