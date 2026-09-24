@@ -677,8 +677,15 @@
     color: inherit;
     font-family: monospace;
   }
-  .print-only {
+  .print-only, .print-checked-only {
     display: none;
+  }
+  .print-blank-lines {
+    margin-top: 0.8rem;
+  }
+  .print-blank-line {
+    border-bottom: 1px solid #000;
+    height: 1.6em;
   }
   @media print {
     .add-store, #storeTabs, .add-item, .remove-btn, .edit-btn, .add-back-btn, .drag-handle, .list-actions, h1, #noStoreMsg, #receiptReview, #barcodeReview, #itemMatchReview, #importView, #searchInput, .sync-row, #cloudSyncView, #qrCodeView, #voiceStatus, #categoriesView, .list-side, #artifactLink, #aldiAdsLink, #dollarTreeLink, .store-search-group {
@@ -876,12 +883,26 @@
   <div class="list-columns" id="listColumns">
     <div class="list-main">
       <ul id="items"></ul>
+      <div class="print-only print-blank-lines" aria-hidden="true">
+        <div class="print-blank-line"></div>
+        <div class="print-blank-line"></div>
+        <div class="print-blank-line"></div>
+        <div class="print-blank-line"></div>
+        <div class="print-blank-line"></div>
+      </div>
     </div>
     <div class="list-side" id="listSide">
       <h3 class="side-heading">✓ Checked off</h3>
       <p id="checkedTotal" class="list-total" style="display:none;"></p>
       <h2 id="printCheckedHeading" class="print-checked-only"></h2>
       <ul id="checkedItems"></ul>
+      <div class="print-checked-only print-blank-lines" aria-hidden="true">
+        <div class="print-blank-line"></div>
+        <div class="print-blank-line"></div>
+        <div class="print-blank-line"></div>
+        <div class="print-blank-line"></div>
+        <div class="print-blank-line"></div>
+      </div>
       <button id="copyCheckedBtn" class="secondary">📋 Copy checked items</button>
       <button id="printCheckedBtn" class="secondary">🖨 Print checked items</button>
     </div>
