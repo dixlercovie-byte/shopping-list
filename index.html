@@ -974,6 +974,7 @@ firebase.initializeApp(firebaseConfig);
 let syncCode = localStorage.getItem(SYNC_CODE_KEY) || null;
 let syncRef = null;
 let syncRev = 0;
+let syncError = null;
 
 function generateSyncCode() {
   const chars = "abcdefghjkmnpqrstuvwxyz23456789";
@@ -988,16 +989,29 @@ function pushToFirebase() {
   if (!syncRef) return;
   syncRev += 1;
   data._rev = syncRev;
-  syncRef.set(data);
+  syncRef.set(data)
+    .then(() => {
+      if (syncError) {
+        syncError = null;
+        renderCloudSyncView();
+      }
+    })
+    .catch((err) => {
+      console.warn("Sync push failed:", err);
+      syncError = err && err.message ? err.message : String(err);
+      renderCloudSyncView();
+    });
 }
 
 function connectSync(code) {
   if (syncRef) syncRef.off();
   syncCode = code;
+  syncError = null;
   localStorage.setItem(SYNC_CODE_KEY, code);
   syncRef = firebase.database().ref("shoppingLists/" + code);
 
   syncRef.on("value", (snapshot) => {
+    syncError = null;
     const remote = snapshot.val();
     if (remote) {
       const remoteRev = typeof remote._rev === "number" ? remote._rev : 0;
@@ -1014,6 +1028,10 @@ function connectSync(code) {
     } else {
       pushToFirebase();
     }
+  }, (err) => {
+    console.warn("Sync read failed:", err);
+    syncError = err && err.message ? err.message : String(err);
+    renderCloudSyncView();
   });
 }
 
@@ -3416,7 +3434,9 @@ function renderCloudSyncView() {
   }
 
   if (syncCode) {
-    status.textContent = "This device is syncing live.";
+    status.textContent = syncError
+      ? "⚠️ Sync error: " + syncError
+      : "This device is syncing live.";
     disconnectedEl.style.display = "none";
     connectedEl.style.display = "block";
     document.getElementById("cloudSyncCode").textContent = syncCode;
