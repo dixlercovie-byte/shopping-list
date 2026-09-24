@@ -1041,6 +1041,10 @@ function allCategories() {
   return data.categories.concat(["Other"]);
 }
 
+function findStaple(storeObj, name) {
+  return storeObj.staples.find(s => s.name.toLowerCase() === name.toLowerCase());
+}
+
 // Snapshot items (e.g. shared links) may carry categories from a device
 // with a different custom category list -- fold in any unrecognized ones
 // so items never silently disappear from the grouped view.
@@ -1092,7 +1096,7 @@ function defaultData() {
         item("100 calorie yogurts (blueberry/strawberry only)", 4, "Dairy & Eggs"),
         item("Cottage cheese", 2, "Dairy & Eggs"),
         item("Lime yogurt", 1, "Dairy & Eggs"),
-      ], history: [] } }, activeList: "Main", favorites: [] },
+      ], history: [] } }, activeList: "Main", favorites: [], staples: [] },
     },
     activeStore: "Aldi",
     sortMode: {},
@@ -1179,6 +1183,10 @@ function normalizeData(d) {
     if (!store.favorites) store.favorites = [];
     store.favorites.forEach(fav => {
       if (!fav.unit) fav.unit = "each";
+    });
+    if (!store.staples) store.staples = [];
+    store.staples.forEach(staple => {
+      if (!staple.unit) staple.unit = "each";
     });
     Object.values(store.lists).forEach(list => {
       if (!list.items) list.items = [];
@@ -2414,9 +2422,36 @@ function render() {
         setTimeout(() => { favBtn.textContent = original; }, 1200);
       });
 
+      const stapleBtn = document.createElement("button");
+      stapleBtn.className = "secondary";
+      const setStapleBtnLabel = () => {
+        stapleBtn.textContent = findStaple(storeObj, item.name)
+          ? "📌 Remove staple"
+          : "📌 Mark as staple";
+      };
+      setStapleBtnLabel();
+      stapleBtn.addEventListener("click", () => {
+        const stapleName = nameInput.value.trim();
+        if (!stapleName) return;
+        const existingStaple = findStaple(storeObj, stapleName);
+        if (existingStaple) {
+          storeObj.staples.splice(storeObj.staples.indexOf(existingStaple), 1);
+        } else {
+          storeObj.staples.push({
+            name: stapleName,
+            qty: parseFloat(qtyInput.value) || 1,
+            unit: unitEditSelect.value || "each",
+            category: categoryEditSelect.value || "Other",
+          });
+        }
+        saveData();
+        setStapleBtnLabel();
+      });
+
       const buttonsWrap = document.createElement("div");
       buttonsWrap.className = "edit-row-buttons";
       buttonsWrap.appendChild(favBtn);
+      buttonsWrap.appendChild(stapleBtn);
       buttonsWrap.appendChild(saveBtn);
       buttonsWrap.appendChild(cancelBtn);
 
@@ -2456,7 +2491,7 @@ function render() {
     const nameWrap = document.createElement("span");
     nameWrap.className = "name";
     const nameLine = document.createElement("span");
-    nameLine.textContent = item.name;
+    nameLine.textContent = (findStaple(storeObj, item.name) ? "📌 " : "") + item.name;
     nameWrap.appendChild(nameLine);
     if (item.note) {
       const noteLine = document.createElement("span");
@@ -3146,18 +3181,29 @@ document.getElementById("sortToggleBtn").addEventListener("click", () => {
 
 document.getElementById("newWeekBtn").addEventListener("click", () => {
   if (!data.activeStore) return;
+  const storeObj = data.stores[data.activeStore];
   const store = getActiveList(data.activeStore);
-  if (store.items.length === 0) {
+  const missingStaples = storeObj.staples.filter(s => !store.items.some(
+    item => item.name.toLowerCase() === s.name.toLowerCase()
+  ));
+  if (store.items.length === 0 && missingStaples.length === 0) {
     alert("This list is already empty.");
     return;
   }
-  if (!confirm(
-    "Start a new week for " + data.activeStore + "? " +
-    "This keeps the same list and unchecks everything so you can shop it again."
-  )) return;
+  let message = "Start a new week for " + data.activeStore + "? " +
+    "This keeps the same list and unchecks everything so you can shop it again.";
+  if (missingStaples.length > 0) {
+    message += " It'll also restock " + missingStaples.length +
+      (missingStaples.length === 1 ? " staple item" : " staple items") +
+      " (" + missingStaples.map(s => s.name).join(", ") + ").";
+  }
+  if (!confirm(message)) return;
 
   store.items.forEach(item => { item.checked = false; });
-  logActivity("started new week", data.activeStore);
+  missingStaples.forEach(s => {
+    store.items.push({ name: s.name, qty: s.qty, unit: s.unit || "each", category: s.category || "Other", checked: false });
+  });
+  logActivity("started new week", data.activeStore, missingStaples.length ? { restocked: missingStaples.map(s => s.name) } : undefined);
   editingIdx = null;
   saveData();
   render();
