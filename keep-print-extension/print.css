@@ -1,0 +1,68 @@
+#keep-print-fab {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 999999;
+  padding: 12px 20px;
+  background: #202124;
+  color: #fff;
+  border: none;
+  border-radius: 24px;
+  font-family: "Google Sans", Roboto, Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}
+
+#keep-print-fab:hover {
+  background: #3c4043;
+}
+
+@media print {
+  #keep-print-fab {
+    display: none !important;
+  }
+
+  /* Printing a single open note: hide everything on the page except the
+     dialog's portal root, then strip the dialog's own chrome (toolbar
+     icons, close/archive/pin buttons, backdrop) so only the title,
+     text/checklist content, and labels remain. */
+  body.keep-print-active:not(.keep-print-grid) > *:not(.keep-print-target) {
+    display: none !important;
+  }
+
+  body.keep-print-active .keep-print-target {
+    position: static !important;
+    inset: auto !important;
+    background: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    height: auto !important;
+    width: auto !important;
+  }
+
+  .keep-print-dialog {
+    position: static !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 auto !important;
+  }
+
+  /* Toolbar/menu icons use role="button"; checklist items use
+     role="checkbox", so this leaves the actual list content untouched. */
+  .keep-print-dialog [role="button"] {
+    display: none !important;
+  }
+
+  /* Printing the whole notes grid (no note open): just drop the chrome
+     around the note cards. */
+  body.keep-print-grid [role="banner"],
+  body.keep-print-grid [role="navigation"],
+  body.keep-print-grid header,
+  body.keep-print-grid nav {
+    display: none !important;
+  }
+}
