@@ -1,0 +1,26 @@
+#keep-print-fab {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 999999;
+  padding: 12px 20px;
+  background: #202124;
+  color: #fff;
+  border: none;
+  border-radius: 24px;
+  font-family: "Google Sans", Roboto, Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}
+
+#keep-print-fab:hover {
+  background: #3c4043;
+}
+
+@media print {
+  #keep-print-fab {
+    display: none !important;
+  }
+}
