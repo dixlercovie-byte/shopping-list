@@ -1,23 +1,12 @@
 (() => {
   const FAB_ID = "keep-print-fab";
-  const HOST_ID = "keep-print-host";
 
-  // DevTools inspection showed Keep's open note isn't a separate dialog
-  // element at all — it shares its wrapper class with ordinary grid tiles
-  // and sits among its siblings in the same container, just rendered as a
-  // floating overlay via CSS. So detect it by how it's actually drawn on
-  // screen (fixed/absolute positioning, sized like a note rather than a
-  // small button or badge) instead of guessing a class or role name. Still
-  // check role="dialog" first in case Keep ever adopts that pattern.
-  function getOpenDialog() {
-    const ariaDialogs = document.querySelectorAll('div[role="dialog"]');
-    for (const dialog of ariaDialogs) {
-      if (dialog.offsetParent !== null) return dialog;
-    }
-    return findOverlayNote();
-  }
-
-  function findOverlayNote() {
+  // An open note is rendered as a floating overlay on top of the grid, so
+  // find it by how it's actually drawn on screen (fixed/absolute
+  // positioning, sized like a note rather than a small button) instead of
+  // guessing a class or role name — Keep's wrapper classes are
+  // build-hashed and shared between grid tiles and the open note alike.
+  function findOpenNoteContainer() {
     const viewportArea = window.innerWidth * window.innerHeight;
     let best = null;
     document.querySelectorAll("div").forEach((el) => {
@@ -33,98 +22,118 @@
     return best ? best.el : null;
   }
 
-  function nearestCommonAncestor(a, b) {
-    const ancestors = new Set();
-    for (let node = a; node; node = node.parentElement) ancestors.add(node);
-    for (let node = b; node; node = node.parentElement) {
-      if (ancestors.has(node)) return node;
+  // Pull out just the note's text — title, and either checklist items (with
+  // checked state) or plain body text — rather than trying to preserve
+  // Keep's exact visual markup. This only depends on ARIA roles Keep uses
+  // for accessibility (role="textbox" for editable text, role="checkbox"
+  // for list items), which are far more stable than its generated class
+  // names and don't care about exactly where the note's container
+  // boundary falls.
+  function extractNote(container) {
+    const textboxes = Array.from(container.querySelectorAll('[role="textbox"]')).filter(
+      (el) => el.offsetParent !== null
+    );
+    const checkboxes = Array.from(container.querySelectorAll('[role="checkbox"]')).filter(
+      (el) => el.offsetParent !== null
+    );
+
+    const title = textboxes.length ? textboxes[0].innerText.trim() : "";
+
+    if (checkboxes.length) {
+      const items = checkboxes
+        .map((checkbox) => {
+          const checked = checkbox.getAttribute("aria-checked") === "true";
+          const row = checkbox.parentElement;
+          const rowTextbox = row ? row.querySelector('[role="textbox"]') : null;
+          const text = (rowTextbox ? rowTextbox.innerText : row ? row.innerText : "").trim();
+          return { text, checked };
+        })
+        .filter((item) => item.text);
+      return { title, items };
     }
-    return null;
+
+    const body = textboxes
+      .slice(1)
+      .map((tb) => tb.innerText.trim())
+      .filter(Boolean)
+      .join("\n\n");
+    return { title, body };
   }
 
-  // Confirmed via DevTools inspection: Keep wraps the whole notes grid in
-  // <div class="notes-container ...">. Unlike the rest of the page's
-  // build-hashed class names, this one reads as a deliberate, stable hook,
-  // so try it first.
-  function findNotesGridContainer() {
-    const known = document.querySelector(".notes-container");
-    if (known && known.offsetParent !== null) return known;
-    return findNotesGridContainerByHeuristic();
+  function escapeHTML(str) {
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
-  // Fallback for if Keep ever renames/removes that class: find whichever
-  // group of elements sharing one exact class attribute repeats the most
-  // across the page (the note tiles almost always win this, since there
-  // are usually far more of them than any other repeated UI element), then
-  // isolate their common container.
-  function findNotesGridContainerByHeuristic() {
-    const groups = new Map();
-    document.querySelectorAll("div[class]").forEach((el) => {
-      const key = el.getAttribute("class");
-      if (!key) return;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(el);
+  function buildPrintDocument({ title, items, body }) {
+    const heading = escapeHTML(title || "Untitled note");
+    const content =
+      items && items.length
+        ? `<ul class="items">${items
+            .map(
+              (item) =>
+                `<li class="${item.checked ? "checked" : ""}"><span class="box"></span><span>${escapeHTML(
+                  item.text
+                )}</span></li>`
+            )
+            .join("")}</ul>`
+        : `<p class="body">${escapeHTML(body || "(empty note)").replace(/\n/g, "<br>")}</p>`;
+
+    return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>${heading}</title>
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; color: #202124; padding: 32px; max-width: 700px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 20px; border-bottom: 2px solid #202124; padding-bottom: 8px; }
+  ul.items { list-style: none; margin: 0; padding: 0; }
+  ul.items li { display: flex; align-items: flex-start; gap: 12px; padding: 8px 0; font-size: 15px; border-bottom: 1px solid #e0e0e0; }
+  .box { width: 16px; height: 16px; border: 2px solid #5f6368; border-radius: 3px; flex: none; margin-top: 2px; }
+  li.checked .box { background: #5f6368; }
+  li.checked { color: #80868b; text-decoration: line-through; }
+  p.body { font-size: 15px; line-height: 1.7; white-space: pre-wrap; }
+  @media print {
+    body { padding: 0; }
+  }
+</style>
+</head>
+<body>
+  <h1>${heading}</h1>
+  ${content}
+</body>
+</html>`;
+  }
+
+  function printNoteWindow(data) {
+    const html = buildPrintDocument(data);
+    const win = window.open("", "_blank", "width=850,height=900");
+    if (!win) {
+      alert(
+        "Your browser blocked the print preview pop-up. Please allow pop-ups for keep.google.com and try again."
+      );
+      return;
+    }
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    win.addEventListener("load", () => {
+      win.focus();
+      win.print();
     });
-
-    let best = null;
-    for (const els of groups.values()) {
-      if (els.length < 4) continue;
-      if (!els.some((el) => el.offsetParent !== null)) continue; // skip hidden groups
-      let ancestor = els[0];
-      for (let i = 1; i < els.length; i++) {
-        ancestor = nearestCommonAncestor(ancestor, els[i]);
-        if (!ancestor) break;
-      }
-      if (!ancestor || ancestor === document.body) continue;
-      if (!best || els.length > best.count) {
-        best = { ancestor, count: els.length };
-      }
-    }
-    return best ? best.ancestor : null;
-  }
-
-  // Keep is a live React app — marking its own DOM nodes with classes and
-  // hiding/showing them in place risks Keep re-rendering and wiping those
-  // classes out before the print snapshot is actually taken, which can
-  // silently blank the page no matter what the CSS says. Sidestep that
-  // entirely: clone the target into a plain, detached container appended
-  // fresh to <body>. The clone still renders correctly, since Keep's CSS
-  // is keyed by class name globally, not scoped to the original node — but
-  // nothing Keep's app does afterward can touch our copy.
-  function printIsolated(target, extraClass) {
-    const clone = target.cloneNode(true);
-    if (extraClass) clone.classList.add(extraClass);
-    const host = document.createElement("div");
-    host.id = HOST_ID;
-    host.appendChild(clone);
-    document.body.appendChild(host);
-    document.body.classList.add("keep-print-active");
-
-    const cleanup = () => {
-      host.remove();
-      document.body.classList.remove("keep-print-active");
-      window.removeEventListener("afterprint", cleanup);
-    };
-    window.addEventListener("afterprint", cleanup);
-    window.print();
-    // Safety net in case afterprint doesn't fire (some browsers skip it if
-    // the print dialog is cancelled very quickly).
-    setTimeout(cleanup, 3000);
   }
 
   function handlePrintRequest() {
-    const dialog = getOpenDialog();
-    if (dialog) {
-      printIsolated(dialog, "keep-print-dialog");
+    const container = findOpenNoteContainer();
+    if (!container) {
+      alert("Open a note first, then click Print.");
       return;
     }
-    const grid = findNotesGridContainer();
-    if (grid) {
-      printIsolated(grid, "keep-print-grid");
+    const data = extractNote(container);
+    if (!data.title && !(data.items && data.items.length) && !data.body) {
+      alert("Couldn't find any text in the open note — try again, or let me know if this keeps happening.");
       return;
     }
-    // Last resort: nothing recognizable found, just print the page as-is.
-    window.print();
+    printNoteWindow(data);
   }
 
   function ensureButton() {
@@ -132,7 +141,7 @@
     const btn = document.createElement("button");
     btn.id = FAB_ID;
     btn.type = "button";
-    btn.title = "Print this note (or all notes if none is open)";
+    btn.title = "Print the open note";
     btn.textContent = "🖨️ Print";
     btn.addEventListener("click", handlePrintRequest);
     document.body.appendChild(btn);

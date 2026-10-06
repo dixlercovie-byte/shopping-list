@@ -1,13 +1,15 @@
 # Print for Google Keep
 
-A small Chrome extension that adds a print button to [Google Keep](https://keep.google.com) so you can print a single note (like a shopping list) without the app's toolbar, sidebar, and other clutter showing up on the page.
+A small Chrome extension that adds a print button to [Google Keep](https://keep.google.com) so you can print a note — like a shopping list — as a clean, simple page instead of Google's print dialog capturing the whole app UI.
 
 ## What it does
 
 - Adds a floating **🖨️ Print** button in the bottom-right corner of any Keep page.
-- Click it while a note is open to print just that note (title, text/checklist, and labels — no toolbar icons or backdrop).
-- Click it with no note open to print the whole notes grid instead.
+- Open a note (checklist or plain text) and click it. The extension reads the note's title and its list items (or text), and opens a new tab with a plain, readable printout — a title, and either a checklist (with boxes showing which items are checked) or the note's text — then triggers your browser's print dialog on that page.
 - The extension's toolbar icon does the same thing, so you don't have to hunt for the floating button.
+- If no note is open, it tells you to open one first — it doesn't try to print the whole notes grid.
+
+This deliberately doesn't try to visually replicate Keep's note card (colors, fonts, exact layout). Google Keep's page is a complex, actively-changing web app with no public structure to target reliably, so instead of fighting it, the extension only reads the note's text content (via stable accessibility roles, not Keep's internal class names) and renders it in a page the extension fully controls. That's what makes this reliable rather than fragile.
 
 ## Install (unpacked, for personal use)
 
@@ -21,5 +23,5 @@ Chrome extensions installed this way aren't published to the Web Store — you l
 
 ## Notes
 
-- Google Keep's page structure isn't publicly documented and can change; if the print button ever produces a blank or messy page, let me know what changed and the selectors in `content.js`/`print.css` can be updated.
-- No data leaves your browser — the extension only adds a button and some print-only CSS to the Keep page you're already viewing.
+- If Chrome blocks the print preview as a pop-up, allow pop-ups for `keep.google.com` and try again.
+- No data leaves your browser — the extension only reads the note you have open and opens a new tab with its text.

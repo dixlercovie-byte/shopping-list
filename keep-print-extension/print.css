@@ -19,43 +19,8 @@
   background: #3c4043;
 }
 
-/* #keep-print-host only ever holds a print-time clone (see content.js);
-   keep it out of the way during normal browsing. */
-#keep-print-host {
-  display: none;
-}
-
 @media print {
   #keep-print-fab {
-    display: none !important;
-  }
-
-  /* Hide the entire live page and show only our detached clone. */
-  body.keep-print-active > :not(#keep-print-host) {
-    display: none !important;
-  }
-
-  body.keep-print-active #keep-print-host {
-    display: block !important;
-  }
-
-  .keep-print-dialog,
-  .keep-print-grid {
-    max-height: none !important;
-    overflow: visible !important;
-    box-shadow: none !important;
-    border: none !important;
-  }
-
-  .keep-print-grid {
-    max-width: 100% !important;
-    background: none !important;
-    margin: 0 auto !important;
-  }
-
-  /* Toolbar/menu icons use role="button"; checklist items use
-     role="checkbox", so this leaves the actual list content untouched. */
-  .keep-print-dialog [role="button"] {
     display: none !important;
   }
 }
