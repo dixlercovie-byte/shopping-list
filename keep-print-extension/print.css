@@ -57,12 +57,18 @@
     display: none !important;
   }
 
-  /* Printing the whole notes grid (no note open): just drop the chrome
-     around the note cards. */
+  /* Printing the whole grid (no note open): drop everything around the
+     note cards themselves — the top app bar/sidebar, the search bar, the
+     Notes/Reminders view tabs, and the "Take a note…" compose box — so
+     only whatever notes are currently visible on screen (e.g. matching
+     your current search or label filter) end up on the page. */
   body.keep-print-grid [role="banner"],
   body.keep-print-grid [role="navigation"],
+  body.keep-print-grid [role="search"],
+  body.keep-print-grid [role="tablist"],
   body.keep-print-grid header,
-  body.keep-print-grid nav {
+  body.keep-print-grid nav,
+  body.keep-print-grid [aria-label^="Take a note"] {
     display: none !important;
   }
 }
