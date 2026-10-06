@@ -1,5 +1,6 @@
 (() => {
   const FAB_ID = "keep-print-fab";
+  const CHAIN_CLASS = "keep-print-chain";
 
   // Google Keep opens a note as a `role="dialog"` React portal appended near
   // the end of <body>. Only one is ever visible at a time, so pick the first
@@ -12,20 +13,72 @@
     return null;
   }
 
-  // Walk up to the portal's root child of <body> so we can hide every other
-  // sibling on the page (Keep's toolbar, sidebar, note grid, etc.) for print.
-  function getPortalRoot(el) {
-    let node = el;
-    while (node.parentElement && node.parentElement !== document.body) {
-      node = node.parentElement;
+  function nearestCommonAncestor(a, b) {
+    const ancestors = new Set();
+    for (let node = a; node; node = node.parentElement) ancestors.add(node);
+    for (let node = b; node; node = node.parentElement) {
+      if (ancestors.has(node)) return node;
     }
-    return node;
+    return null;
   }
 
-  function printWithCleanup(applyClasses, removeClasses) {
-    applyClasses();
+  // Keep's DOM has no stable, documented selector for "the notes grid" — its
+  // class names are build-hashed and can change at any time. Instead, find
+  // whichever group of elements sharing one exact class attribute repeats
+  // the most across the page (the note tiles almost always win this, since
+  // there are usually far more of them than any other repeated UI element),
+  // then isolate their common container.
+  function findNotesGridContainer() {
+    const groups = new Map();
+    document.querySelectorAll("div[class]").forEach((el) => {
+      const key = el.getAttribute("class");
+      if (!key) return;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(el);
+    });
+
+    let best = null;
+    for (const els of groups.values()) {
+      if (els.length < 4) continue;
+      if (!els.some((el) => el.offsetParent !== null)) continue; // skip hidden groups
+      let ancestor = els[0];
+      for (let i = 1; i < els.length; i++) {
+        ancestor = nearestCommonAncestor(ancestor, els[i]);
+        if (!ancestor) break;
+      }
+      if (!ancestor || ancestor === document.body) continue;
+      if (!best || els.length > best.count) {
+        best = { ancestor, count: els.length };
+      }
+    }
+    return best ? best.ancestor : null;
+  }
+
+  // Add a marker class to `target` and every ancestor up to <body>. The
+  // matching print CSS hides any element that is a direct child of a marked
+  // ancestor but isn't itself marked — i.e. every branch off the path to
+  // `target` disappears, while `target` and everything inside it stays
+  // exactly as rendered.
+  function isolate(target) {
+    const chain = [];
+    for (let node = target; node; node = node.parentElement) {
+      chain.push(node);
+      if (node === document.body) break;
+    }
+    chain.forEach((node) => node.classList.add(CHAIN_CLASS));
+    document.body.classList.add("keep-print-active");
+    return () => {
+      chain.forEach((node) => node.classList.remove(CHAIN_CLASS));
+      document.body.classList.remove("keep-print-active");
+    };
+  }
+
+  function printIsolated(target, extraClass) {
+    if (extraClass) target.classList.add(extraClass);
+    const restore = isolate(target);
     const cleanup = () => {
-      removeClasses();
+      restore();
+      if (extraClass) target.classList.remove(extraClass);
       window.removeEventListener("afterprint", cleanup);
     };
     window.addEventListener("afterprint", cleanup);
@@ -35,36 +88,19 @@
     setTimeout(cleanup, 3000);
   }
 
-  function printOpenDialog(dialog) {
-    const portalRoot = getPortalRoot(dialog);
-    printWithCleanup(
-      () => {
-        document.body.classList.add("keep-print-active");
-        portalRoot.classList.add("keep-print-target");
-        dialog.classList.add("keep-print-dialog");
-      },
-      () => {
-        document.body.classList.remove("keep-print-active");
-        portalRoot.classList.remove("keep-print-target");
-        dialog.classList.remove("keep-print-dialog");
-      }
-    );
-  }
-
-  function printNoteGrid() {
-    printWithCleanup(
-      () => document.body.classList.add("keep-print-active", "keep-print-grid"),
-      () => document.body.classList.remove("keep-print-active", "keep-print-grid")
-    );
-  }
-
   function handlePrintRequest() {
     const dialog = getOpenDialog();
     if (dialog) {
-      printOpenDialog(dialog);
-    } else {
-      printNoteGrid();
+      printIsolated(dialog, "keep-print-dialog");
+      return;
     }
+    const grid = findNotesGridContainer();
+    if (grid) {
+      printIsolated(grid, "keep-print-grid");
+      return;
+    }
+    // Last resort: nothing recognizable found, just print the page as-is.
+    window.print();
   }
 
   function ensureButton() {

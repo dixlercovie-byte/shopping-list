@@ -24,28 +24,27 @@
     display: none !important;
   }
 
-  /* Printing a single open note: hide everything on the page except the
-     dialog's portal root, then strip the dialog's own chrome (toolbar
-     icons, close/archive/pin buttons, backdrop) so only the title,
-     text/checklist content, and labels remain. */
-  body.keep-print-active:not(.keep-print-grid) > *:not(.keep-print-target) {
+  /* content.js marks the print target and every ancestor up to <body>
+     with .keep-print-chain (body included). This hides every branch that
+     forks off that path, so only the target's own subtree ever reaches
+     the printed page — whether that's the open note's dialog or the
+     notes grid. Body needs its own selector since it can't be a
+     "descendant" of itself for the second rule to match. */
+  body.keep-print-active.keep-print-chain > :not(.keep-print-chain),
+  body.keep-print-active .keep-print-chain > :not(.keep-print-chain) {
     display: none !important;
   }
 
-  body.keep-print-active .keep-print-target {
+  .keep-print-dialog,
+  .keep-print-grid {
     position: static !important;
     inset: auto !important;
-    background: none !important;
-    box-shadow: none !important;
-    overflow: visible !important;
-    height: auto !important;
-    width: auto !important;
-  }
-
-  .keep-print-dialog {
-    position: static !important;
     max-width: 100% !important;
     max-height: none !important;
+    height: auto !important;
+    width: auto !important;
+    overflow: visible !important;
+    background: none !important;
     box-shadow: none !important;
     border: none !important;
     margin: 0 auto !important;
@@ -54,21 +53,6 @@
   /* Toolbar/menu icons use role="button"; checklist items use
      role="checkbox", so this leaves the actual list content untouched. */
   .keep-print-dialog [role="button"] {
-    display: none !important;
-  }
-
-  /* Printing the whole grid (no note open): drop everything around the
-     note cards themselves — the top app bar/sidebar, the search bar, the
-     Notes/Reminders view tabs, and the "Take a note…" compose box — so
-     only whatever notes are currently visible on screen (e.g. matching
-     your current search or label filter) end up on the page. */
-  body.keep-print-grid [role="banner"],
-  body.keep-print-grid [role="navigation"],
-  body.keep-print-grid [role="search"],
-  body.keep-print-grid [role="tablist"],
-  body.keep-print-grid header,
-  body.keep-print-grid nav,
-  body.keep-print-grid [aria-label^="Take a note"] {
     display: none !important;
   }
 }
