@@ -24,14 +24,19 @@
     display: none !important;
   }
 
-  /* content.js marks the print target and every ancestor up to <body>
-     with .keep-print-chain (body included). This hides every branch that
-     forks off that path, so only the target's own subtree ever reaches
-     the printed page — whether that's the open note's dialog or the
-     notes grid. Body needs its own selector since it can't be a
-     "descendant" of itself for the second rule to match. */
-  body.keep-print-active.keep-print-chain > :not(.keep-print-chain),
-  body.keep-print-active .keep-print-chain > :not(.keep-print-chain) {
+  /* content.js marks the print target's ancestors (up to and including
+     <body>) with .keep-print-chain, and the target itself with
+     .keep-print-target. This hides every branch that forks off the path
+     to the target, so only its own subtree ever reaches the printed page
+     — whether that's the open note or the notes grid. The target gets a
+     different class than its ancestors on purpose: since only
+     .keep-print-chain elements trigger this hiding rule, it never fires
+     on the target's own children, which would otherwise wipe out
+     everything inside the note/grid we're trying to print. Body needs
+     its own selector since it can't be a "descendant" of itself for the
+     second rule to match. */
+  body.keep-print-active.keep-print-chain > :not(.keep-print-chain):not(.keep-print-target),
+  body.keep-print-active .keep-print-chain > :not(.keep-print-chain):not(.keep-print-target) {
     display: none !important;
   }
 

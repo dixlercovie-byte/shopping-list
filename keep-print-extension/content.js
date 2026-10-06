@@ -1,6 +1,7 @@
 (() => {
   const FAB_ID = "keep-print-fab";
   const CHAIN_CLASS = "keep-print-chain";
+  const TARGET_CLASS = "keep-print-target";
 
   // DevTools inspection showed Keep's open note isn't a separate dialog
   // element at all — it shares its wrapper class with ordinary grid tiles
@@ -83,21 +84,26 @@
     return best ? best.ancestor : null;
   }
 
-  // Add a marker class to `target` and every ancestor up to <body>. The
-  // matching print CSS hides any element that is a direct child of a marked
-  // ancestor but isn't itself marked — i.e. every branch off the path to
-  // `target` disappears, while `target` and everything inside it stays
-  // exactly as rendered.
+  // Mark every ancestor from `target`'s parent up to <body> with
+  // CHAIN_CLASS, and `target` itself with TARGET_CLASS. The matching print
+  // CSS hides any child of a CHAIN_CLASS element that is neither itself
+  // chain-marked nor the target — i.e. every branch that forks off the
+  // path to `target` disappears. Critically, `target` is marked with a
+  // *different* class than its ancestors, so the hiding rule (which
+  // triggers on CHAIN_CLASS elements) never fires on target's own
+  // children — otherwise the target's whole subtree would get hidden too.
   function isolate(target) {
-    const chain = [];
-    for (let node = target; node; node = node.parentElement) {
-      chain.push(node);
+    const ancestors = [];
+    for (let node = target.parentElement; node; node = node.parentElement) {
+      ancestors.push(node);
       if (node === document.body) break;
     }
-    chain.forEach((node) => node.classList.add(CHAIN_CLASS));
+    target.classList.add(TARGET_CLASS);
+    ancestors.forEach((node) => node.classList.add(CHAIN_CLASS));
     document.body.classList.add("keep-print-active");
     return () => {
-      chain.forEach((node) => node.classList.remove(CHAIN_CLASS));
+      target.classList.remove(TARGET_CLASS);
+      ancestors.forEach((node) => node.classList.remove(CHAIN_CLASS));
       document.body.classList.remove("keep-print-active");
     };
   }
