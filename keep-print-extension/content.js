@@ -22,13 +22,22 @@
     return null;
   }
 
-  // Keep's DOM has no stable, documented selector for "the notes grid" — its
-  // class names are build-hashed and can change at any time. Instead, find
-  // whichever group of elements sharing one exact class attribute repeats
-  // the most across the page (the note tiles almost always win this, since
-  // there are usually far more of them than any other repeated UI element),
-  // then isolate their common container.
+  // Confirmed via DevTools inspection: Keep wraps the whole notes grid in
+  // <div class="notes-container ...">. Unlike the rest of the page's
+  // build-hashed class names, this one reads as a deliberate, stable hook,
+  // so try it first.
   function findNotesGridContainer() {
+    const known = document.querySelector(".notes-container");
+    if (known && known.offsetParent !== null) return known;
+    return findNotesGridContainerByHeuristic();
+  }
+
+  // Fallback for if Keep ever renames/removes that class: find whichever
+  // group of elements sharing one exact class attribute repeats the most
+  // across the page (the note tiles almost always win this, since there
+  // are usually far more of them than any other repeated UI element), then
+  // isolate their common container.
+  function findNotesGridContainerByHeuristic() {
     const groups = new Map();
     document.querySelectorAll("div[class]").forEach((el) => {
       const key = el.getAttribute("class");
