@@ -19,49 +19,37 @@
   background: #3c4043;
 }
 
+/* #keep-print-host only ever holds a print-time clone (see content.js);
+   keep it out of the way during normal browsing. */
+#keep-print-host {
+  display: none;
+}
+
 @media print {
   #keep-print-fab {
     display: none !important;
   }
 
-  /* content.js marks the print target's ancestors (up to and including
-     <body>) with .keep-print-chain, and the target itself with
-     .keep-print-target. This hides every branch that forks off the path
-     to the target, so only its own subtree ever reaches the printed page
-     — whether that's the open note or the notes grid. The target gets a
-     different class than its ancestors on purpose: since only
-     .keep-print-chain elements trigger this hiding rule, it never fires
-     on the target's own children, which would otherwise wipe out
-     everything inside the note/grid we're trying to print. Body needs
-     its own selector since it can't be a "descendant" of itself for the
-     second rule to match. */
-  body.keep-print-active.keep-print-chain > :not(.keep-print-chain):not(.keep-print-target),
-  body.keep-print-active .keep-print-chain > :not(.keep-print-chain):not(.keep-print-target) {
+  /* Hide the entire live page and show only our detached clone. */
+  body.keep-print-active > :not(#keep-print-host) {
     display: none !important;
   }
 
-  /* The open note is positioned fixed/absolute and almost certainly sized
-     via its edge offsets (top/left/right/bottom) rather than an explicit
-     width/height. Forcing it to position: static would strip those
-     offsets and collapse it inside whatever ancestor it's isolated
-     within — which is exactly what produced a blank printed page. Leave
-     its positioning alone and only clean up cosmetic chrome. */
-  .keep-print-dialog {
+  body.keep-print-active #keep-print-host {
+    display: block !important;
+  }
+
+  .keep-print-dialog,
+  .keep-print-grid {
     max-height: none !important;
     overflow: visible !important;
     box-shadow: none !important;
     border: none !important;
   }
 
-  /* The notes grid is a normal in-flow element (position: relative), so
-     resetting its box model is safe here. */
   .keep-print-grid {
     max-width: 100% !important;
-    max-height: none !important;
-    overflow: visible !important;
     background: none !important;
-    box-shadow: none !important;
-    border: none !important;
     margin: 0 auto !important;
   }
 

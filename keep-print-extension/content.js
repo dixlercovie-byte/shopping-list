@@ -1,7 +1,6 @@
 (() => {
   const FAB_ID = "keep-print-fab";
-  const CHAIN_CLASS = "keep-print-chain";
-  const TARGET_CLASS = "keep-print-target";
+  const HOST_ID = "keep-print-host";
 
   // DevTools inspection showed Keep's open note isn't a separate dialog
   // element at all — it shares its wrapper class with ordinary grid tiles
@@ -84,36 +83,26 @@
     return best ? best.ancestor : null;
   }
 
-  // Mark every ancestor from `target`'s parent up to <body> with
-  // CHAIN_CLASS, and `target` itself with TARGET_CLASS. The matching print
-  // CSS hides any child of a CHAIN_CLASS element that is neither itself
-  // chain-marked nor the target — i.e. every branch that forks off the
-  // path to `target` disappears. Critically, `target` is marked with a
-  // *different* class than its ancestors, so the hiding rule (which
-  // triggers on CHAIN_CLASS elements) never fires on target's own
-  // children — otherwise the target's whole subtree would get hidden too.
-  function isolate(target) {
-    const ancestors = [];
-    for (let node = target.parentElement; node; node = node.parentElement) {
-      ancestors.push(node);
-      if (node === document.body) break;
-    }
-    target.classList.add(TARGET_CLASS);
-    ancestors.forEach((node) => node.classList.add(CHAIN_CLASS));
-    document.body.classList.add("keep-print-active");
-    return () => {
-      target.classList.remove(TARGET_CLASS);
-      ancestors.forEach((node) => node.classList.remove(CHAIN_CLASS));
-      document.body.classList.remove("keep-print-active");
-    };
-  }
-
+  // Keep is a live React app — marking its own DOM nodes with classes and
+  // hiding/showing them in place risks Keep re-rendering and wiping those
+  // classes out before the print snapshot is actually taken, which can
+  // silently blank the page no matter what the CSS says. Sidestep that
+  // entirely: clone the target into a plain, detached container appended
+  // fresh to <body>. The clone still renders correctly, since Keep's CSS
+  // is keyed by class name globally, not scoped to the original node — but
+  // nothing Keep's app does afterward can touch our copy.
   function printIsolated(target, extraClass) {
-    if (extraClass) target.classList.add(extraClass);
-    const restore = isolate(target);
+    const clone = target.cloneNode(true);
+    if (extraClass) clone.classList.add(extraClass);
+    const host = document.createElement("div");
+    host.id = HOST_ID;
+    host.appendChild(clone);
+    document.body.appendChild(host);
+    document.body.classList.add("keep-print-active");
+
     const cleanup = () => {
-      restore();
-      if (extraClass) target.classList.remove(extraClass);
+      host.remove();
+      document.body.classList.remove("keep-print-active");
       window.removeEventListener("afterprint", cleanup);
     };
     window.addEventListener("afterprint", cleanup);

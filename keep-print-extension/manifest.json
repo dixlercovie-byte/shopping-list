@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Print for Google Keep",
   "short_name": "Keep Print",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Adds a one-click print button to Google Keep for printing clean, clutter-free notes and lists.",
   "icons": {
     "16": "icons/icon16.png",
