@@ -2,15 +2,35 @@
   const FAB_ID = "keep-print-fab";
   const CHAIN_CLASS = "keep-print-chain";
 
-  // Google Keep opens a note as a `role="dialog"` React portal appended near
-  // the end of <body>. Only one is ever visible at a time, so pick the first
-  // one that's actually laid out on screen.
+  // DevTools inspection showed Keep's open note isn't a separate dialog
+  // element at all — it shares its wrapper class with ordinary grid tiles
+  // and sits among its siblings in the same container, just rendered as a
+  // floating overlay via CSS. So detect it by how it's actually drawn on
+  // screen (fixed/absolute positioning, sized like a note rather than a
+  // small button or badge) instead of guessing a class or role name. Still
+  // check role="dialog" first in case Keep ever adopts that pattern.
   function getOpenDialog() {
-    const dialogs = document.querySelectorAll('div[role="dialog"]');
-    for (const dialog of dialogs) {
+    const ariaDialogs = document.querySelectorAll('div[role="dialog"]');
+    for (const dialog of ariaDialogs) {
       if (dialog.offsetParent !== null) return dialog;
     }
-    return null;
+    return findOverlayNote();
+  }
+
+  function findOverlayNote() {
+    const viewportArea = window.innerWidth * window.innerHeight;
+    let best = null;
+    document.querySelectorAll("div").forEach((el) => {
+      if (el.id === FAB_ID) return;
+      const style = getComputedStyle(el);
+      if (style.position !== "fixed" && style.position !== "absolute") return;
+      const rect = el.getBoundingClientRect();
+      if (rect.width < 300 || rect.height < 150) return; // too small to be a note
+      const area = rect.width * rect.height;
+      if (area > viewportArea * 0.95) return; // skip full-page scrims/backdrops
+      if (!best || area > best.area) best = { el, area };
+    });
+    return best ? best.el : null;
   }
 
   function nearestCommonAncestor(a, b) {
