@@ -35,14 +35,24 @@
     display: none !important;
   }
 
-  .keep-print-dialog,
+  /* The open note is positioned fixed/absolute and almost certainly sized
+     via its edge offsets (top/left/right/bottom) rather than an explicit
+     width/height. Forcing it to position: static would strip those
+     offsets and collapse it inside whatever ancestor it's isolated
+     within — which is exactly what produced a blank printed page. Leave
+     its positioning alone and only clean up cosmetic chrome. */
+  .keep-print-dialog {
+    max-height: none !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* The notes grid is a normal in-flow element (position: relative), so
+     resetting its box model is safe here. */
   .keep-print-grid {
-    position: static !important;
-    inset: auto !important;
     max-width: 100% !important;
     max-height: none !important;
-    height: auto !important;
-    width: auto !important;
     overflow: visible !important;
     background: none !important;
     box-shadow: none !important;
