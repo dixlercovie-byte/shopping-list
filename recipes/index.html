@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Recipes</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="../icon-192.png">
+<link rel="apple-touch-icon" href="../icon-192.png">
+<meta name="theme-color" content="#e0743a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<style>
+  :root { color-scheme: light dark; --accent: #e0743a; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    max-width: 720px; margin: 0 auto; padding: 1rem;
+    background: Canvas; color: CanvasText;
+  }
+  h1 { font-size: 1.5rem; margin: 0; }
+  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+  button, input, textarea, select {
+    font: inherit; color: inherit; background: Field;
+    border: 1px solid #8886; border-radius: 8px; padding: 0.5rem 0.7rem;
+  }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { color: #e05555; }
+  button.link { border: none; background: none; padding: 0.2rem; }
+  input, textarea, select { width: 100%; }
+  textarea { resize: vertical; min-height: 7rem; }
+  label { display: block; font-size: 0.85rem; opacity: 0.75; margin: 0.9rem 0 0.25rem; }
+  .row { display: flex; gap: 0.5rem; align-items: center; }
+  .row > * { flex: 1; }
+  .row > button { flex: none; }
+  .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.75rem 0; }
+  .chip { border-radius: 999px; padding: 0.25rem 0.8rem; font-size: 0.9rem; }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .card {
+    display: block; width: 100%; text-align: left; margin: 0.6rem 0;
+    padding: 0.8rem 1rem; border: 1px solid #8886; border-radius: 12px; background: Field;
+  }
+  .card h3 { margin: 0 0 0.2rem; font-size: 1.05rem; }
+  .meta { font-size: 0.85rem; opacity: 0.7; }
+  .tag { display: inline-block; font-size: 0.75rem; padding: 0.05rem 0.5rem; margin: 0.3rem 0.25rem 0 0;
+         border-radius: 999px; background: #e0743a22; color: var(--accent); }
+  .empty { text-align: center; opacity: 0.6; padding: 3rem 1rem; }
+  ul.ingredients { padding-left: 1.2rem; }
+  ul.ingredients li, ol.steps li { margin: 0.35rem 0; }
+  ol.steps { padding-left: 1.4rem; }
+  .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0; }
+  .scaler { display: flex; align-items: center; gap: 0.5rem; }
+  .scaler button { padding: 0.2rem 0.7rem; }
+  .hidden { display: none; }
+  .notes { white-space: pre-wrap; background: #8881; padding: 0.7rem; border-radius: 8px; }
+  .fav { color: #f5b301; }
+  @media print { header button, .actions, .scaler button, #search, .chips { display: none; } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+const KEY = "recipes.v1";
+let recipes = [];
+let view = { name: "list" };       // list | detail | edit
+let filter = { q: "", tag: "", favs: false };
+let servingsFactor = 1;
+
+function load() {
+  try { recipes = JSON.parse(localStorage.getItem(KEY)) || []; } catch { recipes = []; }
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(recipes)); }
+  catch { alert("Could not save — storage may be full or disabled."); }
+}
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const lines = (s) => String(s || "").split("\n").map((l) => l.trim()).filter(Boolean);
+const allTags = () => [...new Set(recipes.flatMap((r) => r.tags))].sort();
+
+// ---- ingredient scaling: scales a leading number ("1 1/2", "2", "0.5", "1/4") ----
+function fmt(n) {
+  const r = Math.round(n * 100) / 100;
+  const whole = Math.floor(r), frac = r - whole;
+  const fracs = [[0.25, "¼"], [0.33, "⅓"], [0.5, "½"], [0.67, "⅔"], [0.75, "¾"]];
+  if (frac < 0.01) return String(whole);
+  const f = fracs.find(([v]) => Math.abs(v - frac) < 0.02);
+  return f ? (whole ? whole + " " : "") + f[1] : String(r);
+}
+function scaleLine(text, factor) {
+  if (factor === 1) return text;
+  const m = text.match(/^(\d+\s+\d+\/\d+|\d+\/\d+|\d*\.?\d+)(.*)$/);
+  if (!m) return text;
+  const q = m[1];
+  let v;
+  if (/^\d+\s+\d+\/\d+$/.test(q)) { const [w, f] = q.split(/\s+/); const [a, b] = f.split("/"); v = +w + a / b; }
+  else if (q.includes("/")) { const [a, b] = q.split("/"); v = a / b; }
+  else v = parseFloat(q);
+  return fmt(v * factor) + m[2];
+}
+
+// ---- views ----
+function render() {
+  const app = document.getElementById("app");
+  app.innerHTML = view.name === "edit" ? editView() : view.name === "detail" ? detailView() : listView();
+  window.scrollTo(0, 0);
+  if (view.name === "list") bindSearch();
+}
+
+function listView() {
+  const q = filter.q.toLowerCase();
+  const shown = recipes
+    .filter((r) => !filter.favs || r.fav)
+    .filter((r) => !filter.tag || r.tags.includes(filter.tag))
+    .filter((r) => !q || [r.title, r.tags.join(" "), r.ingredients.join(" ")].join(" ").toLowerCase().includes(q))
+    .sort((a, b) => a.title.localeCompare(b.title));
+  const tags = allTags();
+  return `
+    <header><h1>🍳 Recipes</h1>
+      <div class="row"><button onclick="importFile()">Import</button><button onclick="exportAll()">Export</button>
+      <button class="primary" onclick="newRecipe()">+ New</button></div></header>
+    <input id="search" type="search" placeholder="Search title, tag or ingredient…" value="${esc(filter.q)}">
+    <div class="chips">
+      <button class="chip ${filter.favs ? "active" : ""}" onclick="toggleFavs()">★ Favorites</button>
+      ${tags.map((t) => `<button class="chip ${filter.tag === t ? "active" : ""}" onclick="setTag('${esc(t).replace(/'/g, "\\'")}')">${esc(t)}</button>`).join("")}
+    </div>
+    ${shown.length ? shown.map((r) => `
+      <button class="card" onclick="openRecipe('${r.id}')">
+        <h3>${r.fav ? '<span class="fav">★</span> ' : ""}${esc(r.title)}</h3>
+        <div class="meta">${[r.time && "⏱ " + esc(r.time), r.servings && "🍽 " + r.servings + " servings", r.ingredients.length + " ingredients"].filter(Boolean).join(" · ")}</div>
+        ${r.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join("")}
+      </button>`).join("")
+      : `<div class="empty">${recipes.length ? "No recipes match." : "No recipes yet. Tap “+ New” to add your first."}</div>`}
+    <input type="file" id="importInput" accept="application/json" class="hidden">`;
+}
+
+function bindSearch() {
+  const s = document.getElementById("search");
+  s.addEventListener("input", () => {
+    filter.q = s.value;
+    const pos = s.selectionStart;
+    render();
+    const n = document.getElementById("search");
+    n.focus(); n.setSelectionRange(pos, pos);
+  });
+  document.getElementById("importInput").addEventListener("change", doImport);
+}
+
+function detailView() {
+  const r = recipes.find((x) => x.id === view.id);
+  if (!r) { view = { name: "list" }; return listView(); }
+  const base = r.servings || 0;
+  return `
+    <header><button onclick="goList()">← Back</button>
+      <button class="link fav" style="font-size:1.6rem" onclick="toggleFav('${r.id}')">${r.fav ? "★" : "☆"}</button></header>
+    <h1>${esc(r.title)}</h1>
+    <div class="meta">${[r.time && "⏱ " + esc(r.time), r.source && esc(r.source)].filter(Boolean).join(" · ")}</div>
+    ${r.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join("")}
+    ${base ? `<p class="scaler">Servings:
+      <button onclick="scale(-1)">−</button><strong>${fmt(base * servingsFactor)}</strong><button onclick="scale(1)">+</button></p>` : ""}
+    <h2>Ingredients</h2>
+    <ul class="ingredients">${r.ingredients.map((i) => `<li>${esc(scaleLine(i, servingsFactor))}</li>`).join("")}</ul>
+    <h2>Steps</h2>
+    <ol class="steps">${r.steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>
+    ${r.notes ? `<h2>Notes</h2><div class="notes">${esc(r.notes)}</div>` : ""}
+    <div class="actions">
+      <button onclick="editRecipe('${r.id}')">Edit</button>
+      <button class="primary" onclick="sendToShoppingList('${r.id}')">🛒 Add to shopping list</button>
+      <button onclick="copyIngredients('${r.id}')">Copy ingredients</button>
+      <button onclick="window.print()">Print</button>
+      <button class="danger" onclick="deleteRecipe('${r.id}')">Delete</button>
+    </div>`;
+}
+
+function editView() {
+  const r = view.draft;
+  return `
+    <header><button onclick="cancelEdit()">Cancel</button><h1>${view.isNew ? "New recipe" : "Edit recipe"}</h1>
+      <button class="primary" onclick="saveEdit()">Save</button></header>
+    <label>Title</label><input id="f-title" value="${esc(r.title)}" placeholder="e.g. Lemon pasta">
+    <div class="row">
+      <div><label>Servings</label><input id="f-servings" type="number" min="1" value="${r.servings || ""}"></div>
+      <div><label>Time</label><input id="f-time" value="${esc(r.time)}" placeholder="30 min"></div>
+    </div>
+    <label>Tags (comma separated)</label><input id="f-tags" value="${esc(r.tags.join(", "))}" placeholder="dinner, vegetarian">
+    <label>Source (optional)</label><input id="f-source" value="${esc(r.source)}">
+    <label>Ingredients (one per line — start with a number to enable scaling)</label>
+    <textarea id="f-ingredients" placeholder="2 cups flour&#10;1/2 tsp salt">${esc(r.ingredients.join("\n"))}</textarea>
+    <label>Steps (one per line)</label>
+    <textarea id="f-steps">${esc(r.steps.join("\n"))}</textarea>
+    <label>Notes</label><textarea id="f-notes" style="min-height:4rem">${esc(r.notes)}</textarea>`;
+}
+
+// ---- actions ----
+const blank = () => ({ id: uid(), title: "", servings: 4, time: "", tags: [], source: "", ingredients: [], steps: [], notes: "", fav: false });
+function newRecipe() { view = { name: "edit", isNew: true, draft: blank() }; render(); }
+function editRecipe(id) { view = { name: "edit", isNew: false, draft: structuredClone(recipes.find((r) => r.id === id)) }; render(); }
+function cancelEdit() { view = view.isNew ? { name: "list" } : { name: "detail", id: view.draft.id }; render(); }
+function saveEdit() {
+  const v = (id) => document.getElementById(id).value;
+  const title = v("f-title").trim();
+  if (!title) { alert("Please enter a title."); return; }
+  const r = {
+    ...view.draft, title,
+    servings: Math.max(0, parseInt(v("f-servings"), 10) || 0),
+    time: v("f-time").trim(), source: v("f-source").trim(),
+    tags: [...new Set(v("f-tags").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean))],
+    ingredients: lines(v("f-ingredients")), steps: lines(v("f-steps")), notes: v("f-notes").trim(),
+  };
+  const i = recipes.findIndex((x) => x.id === r.id);
+  if (i >= 0) recipes[i] = r; else recipes.push(r);
+  save();
+  servingsFactor = 1;
+  view = { name: "detail", id: r.id };
+  render();
+}
+function openRecipe(id) { servingsFactor = 1; view = { name: "detail", id }; render(); }
+function goList() { view = { name: "list" }; render(); }
+function toggleFav(id) { const r = recipes.find((x) => x.id === id); r.fav = !r.fav; save(); render(); }
+function toggleFavs() { filter.favs = !filter.favs; render(); }
+function setTag(t) { filter.tag = filter.tag === t ? "" : t; render(); }
+function deleteRecipe(id) {
+  const r = recipes.find((x) => x.id === id);
+  if (!confirm(`Delete “${r.title}”?`)) return;
+  recipes = recipes.filter((x) => x.id !== id); save(); goList();
+}
+function scale(dir) {
+  const r = recipes.find((x) => x.id === view.id);
+  const next = Math.max(1, Math.round(r.servings * servingsFactor) + dir);
+  servingsFactor = next / r.servings; render();
+}
+async function copyIngredients(id) {
+  const r = recipes.find((x) => x.id === id);
+  const text = r.ingredients.map((i) => scaleLine(i, servingsFactor)).join("\n");
+  try { await navigator.clipboard.writeText(text); alert("Ingredients copied."); }
+  catch { prompt("Copy ingredients:", text); }
+}
+function sendToShoppingList(id) {
+  const r = recipes.find((x) => x.id === id);
+  const items = r.ingredients.map((i) => scaleLine(i, servingsFactor));
+  if (!items.length) { alert("This recipe has no ingredients."); return; }
+  const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(items))))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  location.href = "../index.html?addItems=" + b64;
+}
+function exportAll() {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(recipes, null, 2)], { type: "application/json" }));
+  a.download = "recipes.json"; a.click(); URL.revokeObjectURL(a.href);
+}
+function importFile() { document.getElementById("importInput").click(); }
+function doImport(e) {
+  const file = e.target.files[0]; if (!file) return;
+  file.text().then((t) => {
+    const data = JSON.parse(t);
+    if (!Array.isArray(data)) throw 0;
+    let added = 0;
+    for (const d of data) {
+      if (!d || !d.title) continue;
+      const r = { ...blank(), ...d, id: uid() };
+      r.tags = [].concat(r.tags || []).map(String);
+      r.ingredients = [].concat(r.ingredients || []).map(String);
+      r.steps = [].concat(r.steps || []).map(String);
+      recipes.push(r); added++;
+    }
+    save(); render(); alert(`Imported ${added} recipe${added === 1 ? "" : "s"}.`);
+  }).catch(() => alert("That file isn't a valid recipes export."));
+}
+
+load();
+render();
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
