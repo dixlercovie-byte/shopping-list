@@ -167,6 +167,7 @@ function detailView() {
     ${r.notes ? `<h2>Notes</h2><div class="notes">${esc(r.notes)}</div>` : ""}
     <div class="actions">
       <button onclick="editRecipe('${r.id}')">Edit</button>
+      <button class="primary" onclick="sendToShoppingList('${r.id}')">🛒 Add to shopping list</button>
       <button onclick="copyIngredients('${r.id}')">Copy ingredients</button>
       <button onclick="window.print()">Print</button>
       <button class="danger" onclick="deleteRecipe('${r.id}')">Delete</button>
@@ -235,6 +236,14 @@ async function copyIngredients(id) {
   const text = r.ingredients.map((i) => scaleLine(i, servingsFactor)).join("\n");
   try { await navigator.clipboard.writeText(text); alert("Ingredients copied."); }
   catch { prompt("Copy ingredients:", text); }
+}
+function sendToShoppingList(id) {
+  const r = recipes.find((x) => x.id === id);
+  const items = r.ingredients.map((i) => scaleLine(i, servingsFactor));
+  if (!items.length) { alert("This recipe has no ingredients."); return; }
+  const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(items))))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  location.href = "../index.html?addItems=" + b64;
 }
 function exportAll() {
   const a = document.createElement("a");

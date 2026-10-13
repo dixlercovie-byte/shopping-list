@@ -3684,6 +3684,29 @@ if (shortcutAction && data.activeStore) {
   history.replaceState({}, "", location.pathname);
 }
 
+// Hand-off from the Recipes app: ?addItems=<base64url JSON array of strings>.
+// Goes through the normal add path so duplicate checks and cloud sync apply.
+const addItemsParam = new URLSearchParams(location.search).get("addItems");
+if (addItemsParam && data.activeStore) {
+  try {
+    const b64 = addItemsParam.replace(/-/g, "+").replace(/_/g, "/");
+    const names = JSON.parse(decodeURIComponent(escape(atob(b64))));
+    const list = getActiveList(data.activeStore);
+    const clean = Array.isArray(names)
+      ? names.filter(n => typeof n === "string" && n.trim()).map(n => n.trim().slice(0, 200)).slice(0, 100)
+      : [];
+    if (list && clean.length &&
+        confirm("Add " + clean.length + " ingredient" + (clean.length === 1 ? "" : "s") + " from your recipe to " + data.activeStore + "?")) {
+      clean.forEach(name => addItemWithDuplicateCheck(list, { name, qty: 1, unit: "each", category: "Other", checked: false }));
+      saveData();
+      render();
+    }
+  } catch (e) {
+    alert("Couldn't read the ingredients sent from Recipes.");
+  }
+  history.replaceState({}, "", location.pathname);
+}
+
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("sw.js").catch((err) => {
