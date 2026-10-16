@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rabbi Millrod's Shul</title>
+<meta name="description" content="Rabbi Millrod's Shul – a warm, welcoming community for prayer, learning and celebration.">
+<style>
+  :root {
+    --navy: #1b2a49;
+    --navy-dark: #121c33;
+    --gold: #c9a24b;
+    --cream: #faf6ec;
+    --ink: #2b2b2b;
+    --muted: #6b6b6b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: Georgia, "Times New Roman", serif;
+    color: var(--ink);
+    background: var(--cream);
+    line-height: 1.65;
+  }
+  h1, h2, h3 { font-weight: normal; line-height: 1.2; }
+  a { color: inherit; }
+
+  /* Nav */
+  header.nav {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--navy-dark);
+    color: #fff;
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    padding: 14px 24px;
+    border-bottom: 3px solid var(--gold);
+  }
+  .brand { font-size: 1.2rem; letter-spacing: .5px; text-decoration: none; }
+  .brand span { color: var(--gold); }
+  nav a {
+    text-decoration: none; margin-left: 20px; font-size: .95rem;
+    font-family: system-ui, sans-serif; opacity: .9;
+  }
+  nav a:hover { color: var(--gold); opacity: 1; }
+
+  /* Hero */
+  .hero {
+    background: linear-gradient(160deg, var(--navy) 0%, var(--navy-dark) 100%);
+    color: #fff; text-align: center;
+    padding: 96px 24px 110px;
+  }
+  .star { font-size: 3rem; color: var(--gold); margin-bottom: 12px; }
+  .hero h1 { font-size: clamp(2.2rem, 6vw, 3.8rem); margin-bottom: 14px; }
+  .hero p { max-width: 620px; margin: 0 auto 30px; font-size: 1.15rem; opacity: .9; }
+  .btn {
+    display: inline-block; padding: 12px 28px; border-radius: 4px;
+    background: var(--gold); color: var(--navy-dark); text-decoration: none;
+    font-family: system-ui, sans-serif; font-weight: 600; margin: 6px;
+  }
+  .btn.alt { background: transparent; color: #fff; border: 2px solid var(--gold); }
+
+  /* Sections */
+  section { padding: 70px 24px; }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  section h2 {
+    font-size: 2rem; color: var(--navy); text-align: center; margin-bottom: 8px;
+  }
+  .rule { width: 60px; height: 3px; background: var(--gold); margin: 0 auto 36px; }
+  .about p { max-width: 720px; margin: 0 auto 16px; text-align: center; }
+
+  .alt-bg { background: #fff; }
+
+  /* Cards */
+  .grid { display: grid; gap: 22px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .card {
+    background: var(--cream); border-top: 4px solid var(--gold);
+    padding: 24px; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,.06);
+  }
+  .alt-bg .card { background: var(--cream); }
+  .card h3 { color: var(--navy); font-size: 1.3rem; margin-bottom: 10px; }
+  .card ul { list-style: none; font-family: system-ui, sans-serif; font-size: .95rem; }
+  .card li { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dotted #ccc; }
+  .card li:last-child { border: 0; }
+  .card li b { font-weight: 600; color: var(--navy); }
+  .note { text-align: center; color: var(--muted); font-size: .9rem; margin-top: 22px; font-style: italic; }
+
+  /* Contact */
+  .contact { background: var(--navy); color: #fff; }
+  .contact h2 { color: #fff; }
+  .contact .card { background: rgba(255,255,255,.07); color: #fff; box-shadow: none; }
+  .contact .card h3 { color: var(--gold); }
+  form { max-width: 520px; margin: 36px auto 0; display: grid; gap: 12px; }
+  input, textarea {
+    width: 100%; padding: 12px; border-radius: 4px; border: 0;
+    font: inherit; font-family: system-ui, sans-serif;
+  }
+  button.btn { border: 0; cursor: pointer; font-size: 1rem; }
+
+  footer {
+    background: var(--navy-dark); color: #aaa; text-align: center;
+    padding: 24px; font-family: system-ui, sans-serif; font-size: .85rem;
+  }
+  @media (max-width: 560px) { nav a { margin: 0 10px 0 0; } header.nav { gap: 8px; } }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <a class="brand" href="#top">✡ Rabbi Millrod's <span>Shul</span></a>
+  <nav>
+    <a href="#about">About</a>
+    <a href="#services">Services</a>
+    <a href="#events">Events</a>
+    <a href="#classes">Classes</a>
+    <a href="#contact">Contact</a>
+  </nav>
+</header>
+
+<div class="hero" id="top">
+  <div class="star">✡</div>
+  <h1>Rabbi Millrod's Shul</h1>
+  <p>A warm, welcoming home for prayer, Torah learning and community — for every Jew, wherever you are on your journey.</p>
+  <a class="btn" href="#services">Service Times</a>
+  <a class="btn alt" href="#contact">Visit Us</a>
+</div>
+
+<section id="about" class="about">
+  <div class="wrap">
+    <h2>Welcome</h2>
+    <div class="rule"></div>
+    <p>Under the guidance of Rabbi Millrod, our shul is a place where tradition meets warmth. Whether you come for daily minyan, a Shabbos meal, a shiur, or simply to say hello, you'll find an open door and a seat at the table.</p>
+    <p>Everyone is welcome — families, singles, seniors, and visitors. Come as you are.</p>
+  </div>
+</section>
+
+<section id="services" class="alt-bg">
+  <div class="wrap">
+    <h2>Service Times</h2>
+    <div class="rule"></div>
+    <div class="grid">
+      <div class="card">
+        <h3>Weekday</h3>
+        <ul>
+          <li><span>Shacharis</span><b>7:00 AM</b></li>
+          <li><span>Mincha / Maariv</span><b>Before sunset</b></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Friday</h3>
+        <ul>
+          <li><span>Mincha / Kabbalas Shabbos</span><b>18 min before sunset</b></li>
+          <li><span>Maariv</span><b>After Kabbalas Shabbos</b></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Shabbos</h3>
+        <ul>
+          <li><span>Shacharis</span><b>9:00 AM</b></li>
+          <li><span>Kiddush</span><b>After davening</b></li>
+          <li><span>Mincha</span><b>Before sunset</b></li>
+        </ul>
+      </div>
+    </div>
+    <p class="note">Times are placeholders — please confirm the current schedule with the shul.</p>
+  </div>
+</section>
+
+<section id="events">
+  <div class="wrap">
+    <h2>Community Events</h2>
+    <div class="rule"></div>
+    <div class="grid">
+      <div class="card"><h3>Shabbos Dinners</h3><p>Join us for a festive Friday night meal with singing, divrei Torah and good company.</p></div>
+      <div class="card"><h3>Holiday Celebrations</h3><p>Rosh Hashanah, Sukkos, Chanukah, Purim, Pesach and more — celebrated together as a community.</p></div>
+      <div class="card"><h3>Lifecycle Simchas</h3><p>Bar and Bat Mitzvahs, weddings, brissim and kiddushim — we're here to share in your joy.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="classes" class="alt-bg">
+  <div class="wrap">
+    <h2>Torah Classes</h2>
+    <div class="rule"></div>
+    <div class="grid">
+      <div class="card"><h3>Daf Yomi</h3><p>Daily Talmud study for all levels.</p></div>
+      <div class="card"><h3>Parsha Shiur</h3><p>Weekly look at the Torah portion with Rabbi Millrod.</p></div>
+      <div class="card"><h3>Learn Hebrew</h3><p>Beginner-friendly classes for adults and kids.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="contact" class="contact">
+  <div class="wrap">
+    <h2>Visit &amp; Contact</h2>
+    <div class="rule"></div>
+    <div class="grid">
+      <div class="card"><h3>Address</h3><p>123 Main Street<br>Your City, State 00000</p></div>
+      <div class="card"><h3>Phone</h3><p>(555) 123-4567</p></div>
+      <div class="card"><h3>Email</h3><p>info@millrodshul.org</p></div>
+    </div>
+    <form onsubmit="event.preventDefault(); this.innerHTML='<p style=&quot;text-align:center&quot;>Thank you! We will be in touch.</p>';">
+      <input type="text" placeholder="Your name" required>
+      <input type="email" placeholder="Your email" required>
+      <textarea rows="4" placeholder="How can we help?" required></textarea>
+      <button class="btn" type="submit">Send Message</button>
+    </form>
+  </div>
+</section>
+
+<footer>© 2026 Rabbi Millrod's Shul · All are welcome</footer>
+
+</body>
+</html>
