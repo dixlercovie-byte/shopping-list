@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kosher Travel &amp; Shabbat Planner</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="../icon-192.png">
+<link rel="apple-touch-icon" href="../icon-192.png">
+<meta name="theme-color" content="#2f5d9e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<style>
+  :root { color-scheme: light dark; --accent: #2f5d9e; --gold: #b8860b; --warn: #d9822b; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    max-width: 720px; margin: 0 auto; padding: 1rem;
+    background: Canvas; color: CanvasText;
+  }
+  h1 { font-size: 1.4rem; margin: 0; }
+  h2 { font-size: 1.15rem; margin: 1.2rem 0 0.4rem; }
+  header { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 1rem; }
+  button, input, textarea, select {
+    font: inherit; color: inherit; background: Field;
+    border: 1px solid #8886; border-radius: 8px; padding: 0.5rem 0.7rem;
+  }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { color: #e05555; }
+  button.link { border: none; background: none; padding: 0.2rem 0.4rem; }
+  input, textarea, select { width: 100%; }
+  input[type=checkbox] { width: auto; }
+  textarea { resize: vertical; min-height: 4rem; }
+  label { display: block; font-size: 0.85rem; opacity: 0.75; margin: 0.8rem 0 0.25rem; }
+  .row { display: flex; gap: 0.5rem; align-items: center; }
+  .row > * { flex: 1; }
+  .row > button { flex: none; }
+  .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.6rem 0; }
+  .chip { border-radius: 999px; padding: 0.25rem 0.8rem; font-size: 0.9rem; }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .tabs { display: flex; gap: 0.3rem; margin: 0.6rem 0 1rem; border-bottom: 1px solid #8884; overflow-x: auto; }
+  .tabs button { border: none; border-bottom: 3px solid transparent; border-radius: 0; background: none; white-space: nowrap; }
+  .tabs button.active { border-bottom-color: var(--accent); font-weight: 600; }
+  .card {
+    display: block; width: 100%; text-align: left; margin: 0.6rem 0;
+    padding: 0.8rem 1rem; border: 1px solid #8886; border-radius: 12px; background: Field;
+  }
+  .card h3 { margin: 0 0 0.2rem; font-size: 1.05rem; }
+  .card.shabbat { border-color: var(--gold); border-width: 2px; }
+  .card.warn { border-color: var(--warn); }
+  .meta { font-size: 0.85rem; opacity: 0.7; }
+  .tag { display: inline-block; font-size: 0.75rem; padding: 0.05rem 0.5rem; margin: 0.3rem 0.25rem 0 0;
+         border-radius: 999px; background: #2f5d9e22; color: var(--accent); }
+  .tag.gold { background: #b8860b22; color: var(--gold); }
+  .tag.warn { background: #d9822b22; color: var(--warn); }
+  .empty { text-align: center; opacity: 0.6; padding: 2.5rem 1rem; }
+  .times { display: flex; gap: 1rem; flex-wrap: wrap; margin: 0.4rem 0 0.2rem; }
+  .times div { flex: 1; min-width: 8rem; }
+  .times b { display: block; font-size: 1.3rem; }
+  .alert { margin: 0.4rem 0; padding: 0.5rem 0.7rem; border-radius: 8px; background: #d9822b22; border-left: 4px solid var(--warn); font-size: 0.9rem; }
+  .check { display: flex; gap: 0.6rem; align-items: flex-start; padding: 0.35rem 0; }
+  .check input { margin-top: 0.3rem; }
+  .check.done span { text-decoration: line-through; opacity: 0.55; }
+  .check span { flex: 1; }
+  .day { display: flex; gap: 0.8rem; padding: 0.55rem 0; border-bottom: 1px solid #8883; }
+  .day .d { width: 5.5rem; flex: none; font-weight: 600; }
+  .day.restricted { background: #b8860b14; margin: 0 -0.5rem; padding: 0.55rem 0.5rem; border-radius: 8px; }
+  .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.8rem; }
+  .small { font-size: 0.8rem; opacity: 0.65; }
+  .results button { display: block; width: 100%; text-align: left; margin: 0.3rem 0; }
+  a { color: var(--accent); }
+  .hidden { display: none; }
+  @media print {
+    button, .tabs, .noprint, details { display: none !important; }
+    body { max-width: none; padding: 0; }
+    .card { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+const KEY = "kosher-travel-v1";
+
+// ---------- Reference data ----------
+const CITIES = [
+  ["Jerusalem, Israel", 31.7683, 35.2137, "Asia/Jerusalem"], ["Tel Aviv, Israel", 32.0853, 34.7818, "Asia/Jerusalem"],
+  ["Eilat, Israel", 29.5577, 34.9519, "Asia/Jerusalem"],
+  ["New York, USA", 40.7128, -74.006, "America/New_York"], ["Boston, USA", 42.3601, -71.0589, "America/New_York"],
+  ["Washington DC, USA", 38.9072, -77.0369, "America/New_York"], ["Miami, USA", 25.7617, -80.1918, "America/New_York"],
+  ["Orlando, USA", 28.5383, -81.3792, "America/New_York"], ["Chicago, USA", 41.8781, -87.6298, "America/Chicago"],
+  ["Denver, USA", 39.7392, -104.9903, "America/Denver"], ["Las Vegas, USA", 36.1699, -115.1398, "America/Los_Angeles"],
+  ["Los Angeles, USA", 34.0522, -118.2437, "America/Los_Angeles"], ["San Francisco, USA", 37.7749, -122.4194, "America/Los_Angeles"],
+  ["Toronto, Canada", 43.6532, -79.3832, "America/Toronto"], ["Montreal, Canada", 45.5017, -73.5673, "America/Toronto"],
+  ["Mexico City, Mexico", 19.4326, -99.1332, "America/Mexico_City"], ["Cancun, Mexico", 21.1619, -86.8515, "America/Cancun"],
+  ["Buenos Aires, Argentina", -34.6037, -58.3816, "America/Argentina/Buenos_Aires"], ["Sao Paulo, Brazil", -23.5505, -46.6333, "America/Sao_Paulo"],
+  ["London, UK", 51.5074, -0.1278, "Europe/London"], ["Paris, France", 48.8566, 2.3522, "Europe/Paris"],
+  ["Amsterdam, Netherlands", 52.3676, 4.9041, "Europe/Amsterdam"], ["Brussels, Belgium", 50.8503, 4.3517, "Europe/Brussels"],
+  ["Berlin, Germany", 52.52, 13.405, "Europe/Berlin"], ["Vienna, Austria", 48.2082, 16.3738, "Europe/Vienna"],
+  ["Zurich, Switzerland", 47.3769, 8.5417, "Europe/Zurich"], ["Rome, Italy", 41.9028, 12.4964, "Europe/Rome"],
+  ["Barcelona, Spain", 41.3874, 2.1686, "Europe/Madrid"], ["Madrid, Spain", 40.4168, -3.7038, "Europe/Madrid"],
+  ["Lisbon, Portugal", 38.7223, -9.1393, "Europe/Lisbon"], ["Athens, Greece", 37.9838, 23.7275, "Europe/Athens"],
+  ["Budapest, Hungary", 47.4979, 19.0402, "Europe/Budapest"], ["Prague, Czechia", 50.0755, 14.4378, "Europe/Prague"],
+  ["Warsaw, Poland", 52.2297, 21.0122, "Europe/Warsaw"], ["Krakow, Poland", 50.0647, 19.945, "Europe/Warsaw"],
+  ["Copenhagen, Denmark", 55.6761, 12.5683, "Europe/Copenhagen"], ["Moscow, Russia", 55.7558, 37.6173, "Europe/Moscow"],
+  ["Istanbul, Turkey", 41.0082, 28.9784, "Europe/Istanbul"], ["Dubai, UAE", 25.2048, 55.2708, "Asia/Dubai"],
+  ["Marrakech, Morocco", 31.6295, -7.9811, "Africa/Casablanca"], ["Johannesburg, South Africa", -26.2041, 28.0473, "Africa/Johannesburg"],
+  ["Cape Town, South Africa", -33.9249, 18.4241, "Africa/Johannesburg"], ["Mumbai, India", 19.076, 72.8777, "Asia/Kolkata"],
+  ["Bangkok, Thailand", 13.7563, 100.5018, "Asia/Bangkok"], ["Singapore", 1.3521, 103.8198, "Asia/Singapore"],
+  ["Hong Kong", 22.3193, 114.1694, "Asia/Hong_Kong"], ["Tokyo, Japan", 35.6762, 139.6503, "Asia/Tokyo"],
+  ["Sydney, Australia", -33.8688, 151.2093, "Australia/Sydney"], ["Melbourne, Australia", -37.8136, 144.9631, "Australia/Melbourne"],
+].map(([name, lat, lon, tz]) => ({ name, lat, lon, tz }));
+
+const DEFAULT_CHECKLIST = [
+  ["Shabbat kit", "Shabbat candles + holders (or tea lights)"],
+  ["Shabbat kit", "Matches / lighter (check airline rules; pack in checked bag)"],
+  ["Shabbat kit", "Kiddush cup + grape juice or wine"],
+  ["Shabbat kit", "Challah / rolls (freeze before the trip)"],
+  ["Shabbat kit", "Havdalah candle, spices, and cup"],
+  ["Shabbat kit", "Siddur / bentcher"],
+  ["Shabbat kit", "Printed Shabbat-times sheet (no phone use on Shabbat)"],
+  ["Shabbat kit", "Timers / Shabbat lamp for the hotel room"],
+  ["Shabbat kit", "Tape for fridge light & door sensors"],
+  ["Shabbat kit", "Pre-torn tissues, toilet paper and wipes"],
+  ["Shabbat kit", "Non-electronic room key plan (ask front desk)"],
+  ["Kosher food", "Order airline kosher meals (24–72 hours ahead)"],
+  ["Kosher food", "Sealed kosher snacks, nuts, fruit, bars"],
+  ["Kosher food", "Canned tuna / sardines, crackers, spreads"],
+  ["Kosher food", "Disposable plates, cups and plastic utensils"],
+  ["Kosher food", "Dish soap, sponge, foil and plastic wrap"],
+  ["Kosher food", "Electric kettle or hot plate (check hotel policy)"],
+  ["Kosher food", "Birkat Hamazon card / small bentcher for meals out"],
+  ["Kosher food", "Pre-arrange kosher meals for Shabbat (Chabad, shul, caterer)"],
+  ["Travel", "Passports / IDs"],
+  ["Travel", "Confirm flights do not leave or land on Shabbat / Yom Tov"],
+  ["Travel", "Hotel within walking distance of shul"],
+  ["Travel", "Tzitzit, kippah and tefillin"],
+  ["Travel", "Local contact for Chabad / community"],
+];
+
+const SHABBAT_CHECKS = [
+  ["eruv", "Confirmed whether there is an eruv (or plan not to carry)"],
+  ["walk", "Lodging is within walking distance of shul"],
+  ["key", "Non-electronic key / door-lock plan arranged"],
+  ["elev", "Shabbat elevator or low floor / stairs"],
+  ["lights", "Lights, AC and blinds set before candle lighting"],
+  ["fridge", "Fridge light and door sensor taped / disabled"],
+  ["food", "Meals, challah and wine / juice arranged"],
+  ["heat", "Hot plate, urn or blech permitted and set up"],
+  ["safe", "Phone, wallet and valuables stowed in the safe"],
+];
+
+const PLACE_TYPES = ["Restaurant", "Grocery", "Bakery", "Shul", "Chabad", "Mikvah", "Hotel", "Other"];
+const KOSHER_KINDS = ["Meat", "Dairy", "Pareve", "Fish", "Mixed", "Unknown"];
+
+// ---------- State ----------
+let data = load();
+let view = { trip: null, tab: "calendar", editTrip: null, editPlace: null, filter: "All", showSettings: false };
+let results = [];
+
+function load() {
+  try {
+    const d = JSON.parse(localStorage.getItem(KEY));
+    if (d && Array.isArray(d.trips)) return { trips: d.trips, settings: Object.assign({ candle: 18, havdalah: 42 }, d.settings) };
+  } catch {}
+  return { trips: [], settings: { candle: 18, havdalah: 42 } };
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(data)); }
+  catch { alert("Couldn't save — browser storage may be full or blocked."); }
+}
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const $ = (id) => document.getElementById(id);
+const trip = () => data.trips.find((t) => t.id === view.trip);
+
+// ---------- Dates & zmanim ----------
+const parse = (s) => new Date(s + "T12:00:00Z");
+const iso = (d) => d.toISOString().slice(0, 10);
+const addDays = (s, n) => iso(new Date(parse(s).getTime() + n * 86400000));
+const dow = (s) => parse(s).getUTCDay();
+const fmtDate = (s) => parse(s).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+const fmtShort = (s) => parse(s).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+
+function hebrew(s) {
+  const p = new Intl.DateTimeFormat("en-u-ca-hebrew", { timeZone: "UTC", day: "numeric", month: "long", year: "numeric" })
+    .formatToParts(parse(s));
+  const get = (t) => p.find((x) => x.type === t)?.value;
+  return { day: +get("day"), month: get("month"), year: get("year") };
+}
+
+// Returns a holiday name for days when work is forbidden (Yom Tov) or a fast/info note.
+function holiday(s, israel) {
+  const { day, month } = hebrew(s);
+  const m = month;
+  if (m === "Tishri") {
+    if (day === 1 || day === 2) return { name: "Rosh Hashana", yt: true };
+    if (day === 3) return { name: "Fast of Gedaliah", fast: true };
+    if (day === 10) return { name: "Yom Kippur", yt: true };
+    if (day === 15 || (!israel && day === 16)) return { name: "Sukkot", yt: true };
+    if (day >= 16 && day <= 21) return { name: "Chol HaMoed Sukkot" };
+    if (day === 22) return { name: israel ? "Shemini Atzeret / Simchat Torah" : "Shemini Atzeret", yt: true };
+    if (!israel && day === 23) return { name: "Simchat Torah", yt: true };
+  }
+  if (m === "Nisan") {
+    if (day === 15 || (!israel && day === 16)) return { name: "Pesach", yt: true };
+    if ((day >= 16 && day <= 20)) return { name: "Chol HaMoed Pesach" };
+    if (day === 21 || (!israel && day === 22)) return { name: "Pesach", yt: true };
+  }
+  if (m === "Sivan" && (day === 6 || (!israel && day === 7))) return { name: "Shavuot", yt: true };
+  if (m === "Tamuz" && day === 17) return { name: "17 Tamuz", fast: true };
+  if (m === "Av" && day === 9) return { name: "Tisha B'Av", fast: true };
+  return null;
+}
+
+// NOAA solar calculations → sunset as a Date (or null if the sun doesn't set).
+function sunset(s, lat, lon) {
+  const rad = Math.PI / 180, deg = 180 / Math.PI;
+  const jd = parse(s).getTime() / 86400000 + 2440587.5; // noon UTC
+  const T = (jd - 2451545) / 36525;
+  const L0 = (280.46646 + T * (36000.76983 + T * 0.0003032)) % 360;
+  const M = 357.52911 + T * (35999.05029 - 0.0001537 * T);
+  const e = 0.016708634 - T * (0.000042037 + 0.0000001267 * T);
+  const C = Math.sin(M * rad) * (1.914602 - T * (0.004817 + 0.000014 * T)) +
+    Math.sin(2 * M * rad) * (0.019993 - 0.000101 * T) + Math.sin(3 * M * rad) * 0.000289;
+  const omega = 125.04 - 1934.136 * T;
+  const lam = L0 + C - 0.00569 - 0.00478 * Math.sin(omega * rad);
+  const eps = 23 + (26 + (21.448 - T * (46.815 + T * (0.00059 - T * 0.001813))) / 60) / 60 + 0.00256 * Math.cos(omega * rad);
+  const decl = Math.asin(Math.sin(eps * rad) * Math.sin(lam * rad));
+  const y = Math.tan(eps * rad / 2) ** 2;
+  const eq = 4 * deg * (y * Math.sin(2 * L0 * rad) - 2 * e * Math.sin(M * rad) +
+    4 * e * y * Math.sin(M * rad) * Math.cos(2 * L0 * rad) - 0.5 * y * y * Math.sin(4 * L0 * rad) -
+    1.25 * e * e * Math.sin(2 * M * rad));
+  const cosH = Math.cos(90.833 * rad) / (Math.cos(lat * rad) * Math.cos(decl)) - Math.tan(lat * rad) * Math.tan(decl);
+  if (cosH < -1 || cosH > 1) return null;
+  const H = Math.acos(cosH) * deg;
+  const minutes = 720 - 4 * (lon - H) - eq; // UTC minutes since midnight of that UTC date
+  return new Date(Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)) + minutes * 60000);
+}
+
+function fmtTime(date, tz) {
+  if (!date) return "—";
+  return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz }).format(date);
+}
+const floorMin = (d) => new Date(Math.floor(d.getTime() / 60000) * 60000);
+const ceilMin = (d) => new Date(Math.ceil(d.getTime() / 60000) * 60000);
+
+function dayInfo(s, t) {
+  const h = holiday(s, t.israel);
+  const sun = sunset(s, t.dest.lat, t.dest.lon);
+  return { date: s, dow: dow(s), heb: hebrew(s), holiday: h, sunset: sun, restricted: dow(s) === 6 || !!(h && h.yt) };
+}
+
+// What happens at the start / end of this day regarding candle lighting & havdalah.
+function candleLighting(s, t) {
+  const today = dayInfo(s, t), next = dayInfo(addDays(s, 1), t);
+  if (!next.restricted) return null;
+  if (next.dow === 6 || !today.restricted) {
+    if (!today.sunset) return { text: "no sunset at this latitude – ask a rabbi" };
+    const when = floorMin(new Date(today.sunset.getTime() - data.settings.candle * 60000));
+    return { time: when, text: fmtTime(when, t.dest.tz) + (today.restricted ? " (from an existing flame)" : "") };
+  }
+  return { text: "after nightfall, from an existing flame" };
+}
+function havdalah(s, t) {
+  const today = dayInfo(s, t), next = dayInfo(addDays(s, 1), t);
+  if (!today.restricted || next.restricted || !today.sunset) return null;
+  const when = ceilMin(new Date(today.sunset.getTime() + data.settings.havdalah * 60000));
+  return { time: when, text: fmtTime(when, t.dest.tz) };
+}
+
+function tripDays(t) {
+  const out = [];
+  for (let d = t.start; d <= t.end && out.length < 400; d = addDays(d, 1)) out.push(d);
+  return out;
+}
+// Shabbatot touching the trip, identified by their Friday.
+function shabbatot(t) {
+  const out = [];
+  let d = addDays(t.start, -1);
+  while (dow(d) !== 5) d = addDays(d, 1);
+  for (; d <= t.end && out.length < 60; d = addDays(d, 7)) if (addDays(d, 1) >= t.start) out.push(d);
+  return out;
+}
+
+function warnings(t) {
+  const w = [];
+  const note = (s, label) => {
+    const i = dayInfo(s, t);
+    if (i.restricted) w.push(`${label} (${fmtShort(s)}) falls on ${i.dow === 6 ? "Shabbat" : i.holiday.name}. Plan travel around it.`);
+    else {
+      const eve = dayInfo(addDays(s, 1), t);
+      const c = candleLighting(s, t);
+      if (eve.restricted && c && c.time)
+        w.push(`${label} (${fmtShort(s)}) is ${eve.dow === 6 ? "Erev Shabbat" : "Erev " + eve.holiday.name}. Candle lighting is ${c.text}, so arrive or depart well before.`);
+    }
+  };
+  note(t.start, "Arrival");
+  if (t.end !== t.start) note(t.end, "Departure");
+  return w;
+}
+
+// ---------- Rendering ----------
+function render() {
+  const app = $("app");
+  if (view.editTrip) app.innerHTML = renderTripForm();
+  else if (view.trip && trip()) app.innerHTML = renderTrip(trip());
+  else app.innerHTML = renderHome();
+}
+
+function renderHome() {
+  const trips = [...data.trips].sort((a, b) => a.start.localeCompare(b.start));
+  const s = data.settings;
+  return `
+  <header>
+    <h1>✡ Kosher Travel &amp; Shabbat Planner</h1>
+    <button class="primary" data-act="new-trip">+ Trip</button>
+  </header>
+  ${trips.length ? trips.map((t) => {
+    const n = shabbatot(t).length;
+    const left = t.checklist.filter((c) => !c.done).length;
+    return `<button class="card" data-act="open-trip" data-id="${t.id}">
+      <h3>${esc(t.name)}</h3>
+      <div class="meta">${esc(t.dest.name)} · ${fmtShort(t.start)} – ${fmtShort(t.end)}</div>
+      <span class="tag gold">${n} Shabbat${n === 1 ? "" : "ot"}</span>
+      <span class="tag">${left} to-do${left === 1 ? "" : "s"}</span>
+      <span class="tag">${t.places.length} place${t.places.length === 1 ? "" : "s"}</span>
+    </button>`;
+  }).join("") : `<div class="empty">No trips yet.<br>Tap <b>+ Trip</b> to plan candle lighting, kosher food and Shabbat for a destination.</div>`}
+  <details style="margin-top:1.5rem" ${view.showSettings ? "open" : ""}>
+    <summary>Settings &amp; backup</summary>
+    <div class="row">
+      <div><label>Candle lighting (minutes before sunset)</label>
+        <input type="number" min="0" max="60" data-setting="candle" value="${s.candle}"></div>
+      <div><label>Havdalah (minutes after sunset)</label>
+        <input type="number" min="20" max="90" data-setting="havdalah" value="${s.havdalah}"></div>
+    </div>
+    <p class="small">Common customs: 18 min (most places), 20 (Tel Aviv/Haifa), 30, 40 (Jerusalem). Havdalah 42–72 min.</p>
+    <div class="actions">
+      <button data-act="export">Export backup</button>
+      <button data-act="import">Import backup</button>
+      <input type="file" id="import-file" accept="application/json" class="hidden">
+    </div>
+  </details>
+  <p class="small">Times are calculated from the sun's position and are estimates. Always confirm with a local rabbi, Chabad or community calendar, especially near borders, at high latitudes, or on Yom Tov.</p>`;
+}
+
+function renderTrip(t) {
+  const tabs = [["calendar", "Calendar"], ["shabbat", "Shabbat"], ["checklist", "Checklist"], ["places", "Places"]];
+  return `
+  <header>
+    <button class="link" data-act="home">← Trips</button>
+    <div class="noprint"><button data-act="edit-trip">Edit</button>
+    <button data-act="copy">Share</button>
+    <button data-act="print">Print</button></div>
+  </header>
+  <h1>${esc(t.name)}</h1>
+  <div class="meta">${esc(t.dest.name)} · ${fmtDate(t.start)} – ${fmtDate(t.end)} · ${esc(t.dest.tz)}</div>
+  <div class="tabs">${tabs.map(([k, l]) => `<button data-act="tab" data-tab="${k}" class="${view.tab === k ? "active" : ""}">${l}</button>`).join("")}</div>
+  ${view.tab === "calendar" ? renderCalendar(t) : view.tab === "shabbat" ? renderShabbat(t) : view.tab === "checklist" ? renderChecklist(t) : renderPlaces(t)}`;
+}
+
+function renderCalendar(t) {
+  const w = warnings(t).map((x) => `<div class="alert">⚠️ ${esc(x)}</div>`).join("");
+  const rows = tripDays(t).map((s) => {
+    const i = dayInfo(s, t), c = candleLighting(s, t), h = havdalah(s, t);
+    const badges = [];
+    if (i.dow === 6) badges.push(`<span class="tag gold">Shabbat</span>`);
+    if (i.holiday) badges.push(`<span class="tag ${i.holiday.yt ? "gold" : i.holiday.fast ? "warn" : ""}">${esc(i.holiday.name)}</span>`);
+    if (s === t.start) badges.push(`<span class="tag">Arrive</span>`);
+    if (s === t.end) badges.push(`<span class="tag">Depart</span>`);
+    return `<div class="day ${i.restricted ? "restricted" : ""}">
+      <div class="d">${fmtShort(s)}</div>
+      <div><div class="meta">${i.heb.day} ${esc(i.heb.month)} · sunset ${fmtTime(i.sunset, t.dest.tz)}</div>
+        ${badges.join("")}
+        ${c ? `<div>🕯️ Candle lighting: <b>${esc(c.text)}</b></div>` : ""}
+        ${h ? `<div>✨ Havdalah: <b>${esc(h.text)}</b></div>` : ""}</div></div>`;
+  }).join("");
+  return w + rows + `<p class="small">Candle lighting ${data.settings.candle} min before sunset; havdalah ${data.settings.havdalah} min after. Change in Settings on the home screen.</p>`;
+}
+
+function renderShabbat(t) {
+  const list = shabbatot(t);
+  if (!list.length) return `<div class="empty">No Shabbat falls within these dates. 🎉</div>`;
+  return list.map((f) => {
+    const sat = addDays(f, 1);
+    const p = (t.shabbat[f] ||= {});
+    const checks = p.checks || {};
+    const c = candleLighting(f, t), h = havdalah(sat, t);
+    const partial = f < t.start ? "You arrive on Shabbat itself." : sat > t.end ? "You depart on Shabbat itself." : "";
+    const done = SHABBAT_CHECKS.filter(([k]) => checks[k]).length;
+    const names = t.places.map((x) => `<option value="${esc(x.name)}">`).join("");
+    const field = (k, label, ph) => `<label>${label}</label><input data-sh="${f}" data-field="${k}" value="${esc(p[k])}" placeholder="${ph}" list="places-list">`;
+    return `<div class="card shabbat">
+      <h3>Shabbat ${fmtShort(f)} – ${fmtShort(sat)}</h3>
+      ${holiday(f, t.israel)?.yt || holiday(sat, t.israel)?.yt ? `<span class="tag gold">Yom Tov overlaps</span>` : ""}
+      ${partial ? `<div class="alert">${partial}</div>` : ""}
+      <div class="times">
+        <div><span class="meta">Candle lighting (Fri)</span><b>${c ? esc(c.text) : "—"}</b></div>
+        <div><span class="meta">Havdalah (Sat)</span><b>${h ? esc(h.text) : "—"}</b></div>
+      </div>
+      <datalist id="places-list">${names}</datalist>
+      ${field("lodging", "Where we're staying", "Hotel / host")}
+      ${field("shul", "Shul / minyan", "Name, time, distance")}
+      ${field("fri", "Friday night meal", "Where / who")}
+      ${field("sat", "Shabbat lunch", "Where / who")}
+      ${field("shalosh", "Seudah shlishit", "Where / who")}
+      <label>Notes</label><textarea data-sh="${f}" data-field="notes">${esc(p.notes)}</textarea>
+      <div class="meta" style="margin-top:.8rem">Shabbat logistics (${done}/${SHABBAT_CHECKS.length})</div>
+      ${SHABBAT_CHECKS.map(([k, label]) => `<label class="check ${checks[k] ? "done" : ""}" style="margin:0;font-size:1rem;opacity:1">
+        <input type="checkbox" data-shcheck="${f}" data-key="${k}" ${checks[k] ? "checked" : ""}><span>${esc(label)}</span></label>`).join("")}
+    </div>`;
+  }).join("");
+}
+
+function renderChecklist(t) {
+  const cats = [...new Set(t.checklist.map((c) => c.cat))];
+  const total = t.checklist.length, done = t.checklist.filter((c) => c.done).length;
+  return `<div class="meta">${done} of ${total} done</div>` + cats.map((cat) => `
+    <h2>${esc(cat)}</h2>
+    ${t.checklist.filter((c) => c.cat === cat).map((c) => `
+      <div class="check ${c.done ? "done" : ""}">
+        <input type="checkbox" data-item="${c.id}" ${c.done ? "checked" : ""}>
+        <span>${esc(c.text)}</span>
+        <button class="link danger" data-act="del-item" data-id="${c.id}" title="Remove">✕</button>
+      </div>`).join("")}
+    <div class="row noprint"><input id="new-${cats.indexOf(cat)}" placeholder="Add to ${esc(cat)}…" data-cat="${esc(cat)}">
+      <button data-act="add-item" data-idx="${cats.indexOf(cat)}">Add</button></div>`).join("");
+}
+
+function renderPlaces(t) {
+  if (view.editPlace) return renderPlaceForm(t);
+  const shown = t.places.filter((p) => view.filter === "All" || p.type === view.filter);
+  const types = ["All", ...PLACE_TYPES.filter((ty) => t.places.some((p) => p.type === ty))];
+  return `<div class="actions noprint"><button class="primary" data-act="place-new">+ Add place</button></div>
+  <div class="chips noprint">${types.map((ty) => `<button class="chip ${view.filter === ty ? "active" : ""}" data-act="filter" data-type="${ty}">${ty}</button>`).join("")}</div>
+  ${shown.length ? shown.map((p) => `<div class="card">
+    <h3>${esc(p.name)}</h3>
+    <span class="tag">${esc(p.type)}</span>
+    ${p.kosher && p.kosher !== "Unknown" ? `<span class="tag gold">${esc(p.kosher)}</span>` : ""}
+    ${p.hechsher ? `<span class="tag">${esc(p.hechsher)}</span>` : ""}
+    ${p.shabbat === "closed" ? `<span class="tag">Closed Shabbat</span>` : p.shabbat === "open" ? `<span class="tag warn">Open Shabbat</span>` : ""}
+    ${p.address ? `<div class="meta">📍 <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.address)}" target="_blank" rel="noopener">${esc(p.address)}</a></div>` : ""}
+    ${p.phone ? `<div class="meta">📞 <a href="tel:${esc(p.phone.replace(/[^\d+]/g, ""))}">${esc(p.phone)}</a></div>` : ""}
+    ${p.hours ? `<div class="meta">🕒 ${esc(p.hours)}</div>` : ""}
+    ${p.notes ? `<div style="margin-top:.3rem;white-space:pre-wrap">${esc(p.notes)}</div>` : ""}
+    <div class="actions noprint"><button data-act="place-edit" data-id="${p.id}">Edit</button>
+      <button class="danger" data-act="place-del" data-id="${p.id}">Delete</button></div>
+  </div>`).join("") : `<div class="empty">No places saved yet.<br>Add kosher restaurants, groceries, shuls, Chabad houses and mikvaot.</div>`}`;
+}
+
+function renderPlaceForm(t) {
+  const p = view.editPlace;
+  const opts = (arr, v) => arr.map((o) => `<option ${o === v ? "selected" : ""}>${o}</option>`).join("");
+  return `<h2>${p.id ? "Edit place" : "New place"}</h2>
+  <label>Name</label><input id="p-name" value="${esc(p.name)}">
+  <div class="row"><div><label>Type</label><select id="p-type">${opts(PLACE_TYPES, p.type)}</select></div>
+    <div><label>Kosher status</label><select id="p-kosher">${opts(KOSHER_KINDS, p.kosher)}</select></div></div>
+  <label>Hechsher / supervision</label><input id="p-hechsher" value="${esc(p.hechsher)}" placeholder="e.g. Rabbanut, Kehilla, OU">
+  <label>Shabbat</label><select id="p-shabbat">
+    <option value="" ${!p.shabbat ? "selected" : ""}>Unknown</option>
+    <option value="closed" ${p.shabbat === "closed" ? "selected" : ""}>Closed on Shabbat</option>
+    <option value="open" ${p.shabbat === "open" ? "selected" : ""}>Open on Shabbat</option></select>
+  <label>Address</label><input id="p-address" value="${esc(p.address)}">
+  <label>Phone</label><input id="p-phone" type="tel" value="${esc(p.phone)}">
+  <label>Hours</label><input id="p-hours" value="${esc(p.hours)}">
+  <label>Notes</label><textarea id="p-notes">${esc(p.notes)}</textarea>
+  <div class="actions"><button class="primary" data-act="place-save">Save</button><button data-act="place-cancel">Cancel</button></div>`;
+}
+
+function renderTripForm() {
+  const t = view.editTrip;
+  const d = t.dest || {};
+  return `<header><h1>${t.id ? "Edit trip" : "New trip"}</h1></header>
+  <label>Trip name</label><input id="f-name" value="${esc(t.name)}" placeholder="e.g. Rome family trip">
+  <label>Destination</label>
+  <div class="row"><input id="f-dest" value="${esc(d.name)}" placeholder="Search a city, e.g. Paris">
+    <button data-act="search-loc">Search</button></div>
+  <div id="results" class="results"></div>
+  <details ${d.lat == null ? "open" : ""}><summary>Coordinates &amp; time zone</summary>
+    <div class="row"><div><label>Latitude</label><input id="f-lat" type="number" step="any" value="${d.lat ?? ""}"></div>
+    <div><label>Longitude</label><input id="f-lon" type="number" step="any" value="${d.lon ?? ""}"></div></div>
+    <label>Time zone (IANA, e.g. Europe/Paris)</label><input id="f-tz" value="${esc(d.tz)}">
+  </details>
+  <div class="row"><div><label>Arrive</label><input id="f-start" type="date" value="${esc(t.start)}"></div>
+    <div><label>Depart</label><input id="f-end" type="date" value="${esc(t.end)}"></div></div>
+  <label>Holiday calendar</label>
+  <select id="f-israel"><option value="0" ${!t.israel ? "selected" : ""}>Outside Israel (two days Yom Tov)</option>
+    <option value="1" ${t.israel ? "selected" : ""}>Israel (one day Yom Tov)</option></select>
+  <div class="actions"><button class="primary" data-act="save-trip">Save</button><button data-act="cancel-trip">Cancel</button>
+    ${t.id ? `<button class="danger" data-act="delete-trip">Delete trip</button>` : ""}</div>`;
+}
+
+// ---------- Actions ----------
+const acts = {
+  home() { view.trip = null; view.editPlace = null; render(); },
+  "open-trip"(el) { view.trip = el.dataset.id; view.tab = "calendar"; view.editPlace = null; view.filter = "All"; render(); },
+  tab(el) { view.tab = el.dataset.tab; view.editPlace = null; render(); },
+  "new-trip"() {
+    const today = iso(new Date());
+    view.editTrip = { name: "", dest: {}, start: today, end: addDays(today, 6), israel: false };
+    render();
+  },
+  "edit-trip"() { view.editTrip = JSON.parse(JSON.stringify(trip())); render(); },
+  "cancel-trip"() { view.editTrip = null; render(); },
+  async "search-loc"() {
+    const q = $("f-dest").value.trim();
+    if (!q) return;
+    const box = $("results");
+    const local = CITIES.filter((c) => c.name.toLowerCase().includes(q.toLowerCase())).slice(0, 5);
+    results = local;
+    box.innerHTML = "Searching…";
+    try {
+      const r = await fetch("https://geocoding-api.open-meteo.com/v1/search?count=6&language=en&name=" + encodeURIComponent(q));
+      const j = await r.json();
+      (j.results || []).forEach((x) => {
+        const name = [x.name, x.admin1, x.country].filter(Boolean).join(", ");
+        if (!results.some((c) => c.name === name)) results.push({ name, lat: x.latitude, lon: x.longitude, tz: x.timezone });
+      });
+    } catch { /* offline: fall back to built-in cities */ }
+    box.innerHTML = results.length
+      ? results.map((c, i) => `<button data-act="pick-loc" data-i="${i}">${esc(c.name)} <span class="small">(${c.lat.toFixed(2)}, ${c.lon.toFixed(2)})</span></button>`).join("")
+      : `<div class="small">No matches. Enter coordinates and time zone manually below.</div>`;
+  },
+  "pick-loc"(el) {
+    const c = results[+el.dataset.i];
+    $("f-dest").value = c.name; $("f-lat").value = c.lat; $("f-lon").value = c.lon; $("f-tz").value = c.tz;
+    $("f-israel").value = c.tz === "Asia/Jerusalem" ? "1" : "0";
+    if (!$("f-name").value.trim()) $("f-name").value = c.name.split(",")[0] + " trip";
+    $("results").innerHTML = ""; document.querySelector("details").open = false;
+  },
+  "save-trip"() {
+    const t = view.editTrip;
+    const lat = parseFloat($("f-lat").value), lon = parseFloat($("f-lon").value), tz = $("f-tz").value.trim();
+    const start = $("f-start").value, end = $("f-end").value, destName = $("f-dest").value.trim();
+    if (!destName || isNaN(lat) || isNaN(lon) || !tz) return alert("Pick a destination (search, or enter coordinates and time zone).");
+    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return alert("Latitude/longitude out of range.");
+    try { new Intl.DateTimeFormat("en-US", { timeZone: tz }); } catch { return alert("Unknown time zone: " + tz); }
+    if (!start || !end || end < start) return alert("Choose valid arrival and departure dates.");
+    if (tripDays({ start, end }).length >= 400) return alert("Trips are limited to about a year.");
+    const fields = { name: $("f-name").value.trim() || destName, dest: { name: destName, lat, lon, tz }, start, end, israel: $("f-israel").value === "1" };
+    if (t.id) Object.assign(trip(), fields);
+    else {
+      const nt = { id: uid(), ...fields, shabbat: {}, places: [],
+        checklist: DEFAULT_CHECKLIST.map(([cat, text]) => ({ id: uid(), cat, text, done: false })) };
+      data.trips.push(nt); view.trip = nt.id; view.tab = "calendar";
+    }
+    save(); view.editTrip = null; render();
+  },
+  "delete-trip"() {
+    if (!confirm("Delete this trip and everything in it?")) return;
+    data.trips = data.trips.filter((x) => x.id !== view.editTrip.id);
+    save(); view.editTrip = null; view.trip = null; render();
+  },
+  "del-item"(el) { const t = trip(); t.checklist = t.checklist.filter((c) => c.id !== el.dataset.id); save(); render(); },
+  "add-item"(el) {
+    const inp = $("new-" + el.dataset.idx), text = inp.value.trim();
+    if (!text) return;
+    trip().checklist.push({ id: uid(), cat: inp.dataset.cat, text, done: false });
+    save(); render();
+  },
+  filter(el) { view.filter = el.dataset.type; render(); },
+  "place-new"() { view.editPlace = { name: "", type: "Restaurant", kosher: "Unknown", hechsher: "", shabbat: "", address: "", phone: "", hours: "", notes: "" }; render(); },
+  "place-edit"(el) { view.editPlace = { ...trip().places.find((p) => p.id === el.dataset.id) }; render(); },
+  "place-cancel"() { view.editPlace = null; render(); },
+  "place-save"() {
+    const name = $("p-name").value.trim();
+    if (!name) return alert("Give the place a name.");
+    const p = { id: view.editPlace.id || uid(), name };
+    for (const k of ["type", "kosher", "hechsher", "shabbat", "address", "phone", "hours", "notes"]) p[k] = $("p-" + k).value.trim();
+    const t = trip(), i = t.places.findIndex((x) => x.id === p.id);
+    if (i >= 0) t.places[i] = p; else t.places.push(p);
+    save(); view.editPlace = null; render();
+  },
+  "place-del"(el) {
+    if (!confirm("Delete this place?")) return;
+    const t = trip(); t.places = t.places.filter((p) => p.id !== el.dataset.id); save(); render();
+  },
+  print() { window.print(); },
+  async copy() {
+    const text = summary(trip());
+    try {
+      if (navigator.share) { await navigator.share({ title: trip().name, text }); return; }
+      await navigator.clipboard.writeText(text);
+      alert("Trip summary copied to the clipboard.");
+    } catch (e) { if (e.name !== "AbortError") prompt("Copy your trip summary:", text); }
+  },
+  export() {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+    a.download = "kosher-travel-backup.json"; a.click(); URL.revokeObjectURL(a.href);
+  },
+  import() { $("import-file").click(); },
+};
+
+function summary(t) {
+  const L = [`${t.name}`, `${t.dest.name} · ${fmtDate(t.start)} – ${fmtDate(t.end)}`, ""];
+  warnings(t).forEach((w) => L.push("⚠️ " + w));
+  L.push("", "SHABBAT");
+  shabbatot(t).forEach((f) => {
+    const p = t.shabbat[f] || {}, c = candleLighting(f, t), h = havdalah(addDays(f, 1), t);
+    L.push(`${fmtShort(f)} – ${fmtShort(addDays(f, 1))}: candles ${c ? c.text : "—"}, havdalah ${h ? h.text : "—"}`);
+    [["lodging", "Staying"], ["shul", "Shul"], ["fri", "Fri night"], ["sat", "Lunch"], ["shalosh", "Seudah shlishit"], ["notes", "Notes"]]
+      .forEach(([k, l]) => p[k] && L.push(`  ${l}: ${p[k]}`));
+  });
+  if (t.places.length) {
+    L.push("", "PLACES");
+    t.places.forEach((p) => L.push(`• ${p.name} (${[p.type, p.kosher !== "Unknown" && p.kosher, p.hechsher].filter(Boolean).join(", ")})` +
+      [p.address, p.phone, p.hours].filter(Boolean).map((x) => "\n    " + x).join("")));
+  }
+  L.push("", "Times are estimates – confirm with a local rabbi or community calendar.");
+  return L.join("\n");
+}
+
+document.addEventListener("click", (e) => {
+  const el = e.target.closest("[data-act]");
+  if (el && acts[el.dataset.act]) acts[el.dataset.act](el);
+});
+document.addEventListener("change", (e) => {
+  const el = e.target;
+  if (el.dataset.item) {
+    const c = trip().checklist.find((x) => x.id === el.dataset.item); c.done = el.checked; save(); render();
+  } else if (el.dataset.sh) {
+    ((trip().shabbat[el.dataset.sh] ||= {}))[el.dataset.field] = el.value.trim(); save();
+  } else if (el.dataset.shcheck) {
+    const p = (trip().shabbat[el.dataset.shcheck] ||= {});
+    (p.checks ||= {})[el.dataset.key] = el.checked; save(); render();
+  } else if (el.dataset.setting) {
+    const v = parseInt(el.value, 10);
+    if (!isNaN(v) && v >= 0) { data.settings[el.dataset.setting] = v; save(); }
+  } else if (el.id === "import-file" && el.files[0]) {
+    el.files[0].text().then((txt) => {
+      const d = JSON.parse(txt);
+      if (!Array.isArray(d.trips)) throw 0;
+      if (!confirm(`Replace current data with ${d.trips.length} trip(s) from this backup?`)) return;
+      localStorage.setItem(KEY, JSON.stringify(d)); data = load(); render();
+    }).catch(() => alert("That file isn't a valid backup."));
+  }
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && e.target.id === "f-dest") { e.preventDefault(); acts["search-loc"](); }
+  if (e.key === "Enter" && e.target.dataset.cat) acts["add-item"]({ dataset: { idx: e.target.id.slice(4) } });
+});
+
+render();
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>

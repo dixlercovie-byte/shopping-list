@@ -1,0 +1,15 @@
+{
+  "name": "Kosher Travel & Shabbat Planner",
+  "short_name": "Shabbat Travel",
+  "description": "Plan kosher food, Shabbat times and Shabbat logistics for your trips",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2f5d9e",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "../icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "../icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
