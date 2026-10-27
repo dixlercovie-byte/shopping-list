@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Hide Cancelled Amazon Orders",
+  "version": "1.0.0",
+  "description": "Hides cancelled orders from your Amazon order history.",
+  "permissions": ["storage"],
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.amazon.com/*order-history*",
+        "*://*.amazon.com/gp/css/order-history*",
+        "*://*.amazon.co.uk/*order-history*",
+        "*://*.amazon.ca/*order-history*",
+        "*://*.amazon.de/*order-history*",
+        "*://*.amazon.fr/*order-history*",
+        "*://*.amazon.it/*order-history*",
+        "*://*.amazon.es/*order-history*",
+        "*://*.amazon.com.au/*order-history*",
+        "*://*.amazon.co.jp/*order-history*",
+        "*://*.amazon.in/*order-history*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": { "default_popup": "popup.html", "default_title": "Hide Cancelled Orders" }
+}
