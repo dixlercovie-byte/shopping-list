@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "Quick Notes",
+  "version": "1.0.0",
+  "description": "Jot down notes from any page, save selected text, and search them later.",
+  "permissions": ["storage", "contextMenus", "activeTab"],
+  "action": { "default_popup": "popup.html", "default_title": "Quick Notes" },
+  "background": { "service_worker": "background.js" },
+  "icons": { "192": "icon.png" }
+}
