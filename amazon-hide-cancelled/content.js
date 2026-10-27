@@ -1,6 +1,6 @@
 (() => {
   // Order containers across current and older Amazon layouts.
-  const CARD_SELECTOR = ".order-card, .js-order-card, .a-box-group.order, [data-component="orderCard"], .yohtmlc-order, [class*="order-card"]";
+  const CARD_SELECTOR = ".order-card, .js-order-card, .a-box-group.order, [data-component='orderCard'], .yohtmlc-order, [class*='order-card']";
   // Matches cancelled/canceled/cancellation-complete wording (not the "Cancel items" button on live orders).
   const CANCELLED = /\b(cancelled|canceled|order cancell?ation)\b|\bannulé|\bstorniert|\bannullat|\bcancelad|\bキャンセル済/i;
   const HIDDEN_ATTR = "data-hcao-hidden";
