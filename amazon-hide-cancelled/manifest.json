@@ -3,25 +3,41 @@
   "name": "Hide Cancelled Amazon Orders",
   "version": "1.0.0",
   "description": "Hides cancelled orders from your Amazon order history.",
-  "permissions": ["storage"],
+  "permissions": [
+    "storage"
+  ],
   "content_scripts": [
     {
       "matches": [
+        "*://*.amazon.com/*your-orders*",
         "*://*.amazon.com/*order-history*",
-        "*://*.amazon.com/gp/css/order-history*",
+        "*://*.amazon.co.uk/*your-orders*",
         "*://*.amazon.co.uk/*order-history*",
+        "*://*.amazon.ca/*your-orders*",
         "*://*.amazon.ca/*order-history*",
+        "*://*.amazon.de/*your-orders*",
         "*://*.amazon.de/*order-history*",
+        "*://*.amazon.fr/*your-orders*",
         "*://*.amazon.fr/*order-history*",
+        "*://*.amazon.it/*your-orders*",
         "*://*.amazon.it/*order-history*",
+        "*://*.amazon.es/*your-orders*",
         "*://*.amazon.es/*order-history*",
+        "*://*.amazon.com.au/*your-orders*",
         "*://*.amazon.com.au/*order-history*",
+        "*://*.amazon.co.jp/*your-orders*",
         "*://*.amazon.co.jp/*order-history*",
+        "*://*.amazon.in/*your-orders*",
         "*://*.amazon.in/*order-history*"
       ],
-      "js": ["content.js"],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
-  "action": { "default_popup": "popup.html", "default_title": "Hide Cancelled Orders" }
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Hide Cancelled Orders"
+  }
 }
